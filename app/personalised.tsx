@@ -1,4 +1,3 @@
-import { Drink, MOCK_DRINKS } from '@/data/drinks';
 import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -13,33 +12,26 @@ import {
 
 interface QuestionnaireData {
   mood: string | null;
-  energyLevel: number;
   timeOfDay: string | null;
   weather: string | null;
   dietaryRestrictions: string[];
 }
 
-interface RecommendationResult {
-  drink: Drink;
-  matchPercentage: number;
-  reason: string;
-}
-
 export default function PersonalisedScreen() {
   const router = useRouter();
   const [showQuestionnaire, setShowQuestionnaire] = useState(true);
-  const [recommendations, setRecommendations] = useState<RecommendationResult[]>([]);
+  const [submittedData, setSubmittedData] = useState<QuestionnaireData | null>(null);
 
   // Questionnaire state
   const [mood, setMood] = useState<string | null>(null);
-  const [energyLevel, setEnergyLevel] = useState<number>(5);
   const [timeOfDay, setTimeOfDay] = useState<string | null>(null);
   const [weather, setWeather] = useState<string | null>(null);
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
 
-  const moods = ['Tired', 'Energetic', 'Focused', 'Calm', 'Anxious', 'Happy'];
-  const times = ['Early Morning', 'Morning', 'Lunch', 'Afternoon', 'Evening', 'Night'];
-  const weathers = ['Hot/Sunny', 'Warm', 'Cool', 'Cold', 'Rainy'];
+  // Simplified options based on supervisor feedback
+  const moods = ['Tired', 'Not Tired'];
+  const times = ['Morning', 'Afternoon', 'Evening'];
+  const weathers = ['Hot/Warm', 'Cold'];
   const restrictions = ['Dairy-free', 'Vegan', 'Gluten-free'];
 
   const toggleRestriction = (restriction: string) => {
@@ -50,134 +42,42 @@ export default function PersonalisedScreen() {
     }
   };
 
-  const calculateRecommendations = () => {
+  const handleSubmit = () => {
     if (!mood || !timeOfDay || !weather) {
-      Alert.alert('Incomplete', 'Please answer all questions before getting recommendations.');
+      Alert.alert('Incomplete', 'Please answer all questions before submitting.');
       return;
     }
 
-    let scoredDrinks = MOCK_DRINKS.map((drink) => {
-      let score = 0;
-      let reasons: string[] = [];
+    // Store the submitted data
+    const data: QuestionnaireData = {
+      mood,
+      timeOfDay,
+      weather,
+      dietaryRestrictions,
+    };
 
-      // Filter by dietary restrictions first
-      if (dietaryRestrictions.includes('Dairy-free') && !drink.dairyFree) return null;
-      if (dietaryRestrictions.includes('Vegan') && !drink.vegan) return null;
-      if (dietaryRestrictions.includes('Gluten-free') && !drink.glutenFree) return null;
-
-      // Mood-based scoring
-      if (mood === 'Tired' && drink.caffeine === 'high') {
-        score += 30;
-        reasons.push('high caffeine for energy');
-      }
-      if (mood === 'Energetic' && drink.caffeine === 'medium') {
-        score += 20;
-        reasons.push('moderate caffeine to maintain energy');
-      }
-      if (mood === 'Calm' && drink.caffeine === 'none') {
-        score += 30;
-        reasons.push('caffeine-free for relaxation');
-      }
-      if (mood === 'Anxious' && drink.caffeine === 'none') {
-        score += 30;
-        reasons.push('no caffeine to avoid jitters');
-      }
-      if (mood === 'Focused' && drink.caffeine === 'medium') {
-        score += 25;
-        reasons.push('balanced caffeine for concentration');
-      }
-      if (mood === 'Happy' && drink.sweetness === 'sweet') {
-        score += 15;
-        reasons.push('sweet treat to match your mood');
-      }
-
-      // Energy level scoring
-      if (energyLevel <= 3 && drink.caffeine === 'high') {
-        score += 25;
-        reasons.push('strong boost for low energy');
-      }
-      if (energyLevel >= 7 && drink.caffeine === 'low') {
-        score += 20;
-        reasons.push('gentle option for high energy');
-      }
-
-      // Time of day scoring
-      if ((timeOfDay === 'Early Morning' || timeOfDay === 'Morning') && drink.caffeine === 'high') {
-        score += 20;
-        reasons.push('perfect morning energizer');
-      }
-      if ((timeOfDay === 'Evening' || timeOfDay === 'Night') && drink.caffeine === 'none') {
-        score += 25;
-        reasons.push('caffeine-free for evening');
-      }
-      if (timeOfDay === 'Afternoon' && drink.caffeine === 'medium') {
-        score += 15;
-        reasons.push('afternoon pick-me-up');
-      }
-
-      // Weather-based scoring
-      if ((weather === 'Hot/Sunny' || weather === 'Warm') && drink.temperature === 'cold') {
-        score += 20;
-        reasons.push('refreshing cold drink');
-      }
-      if ((weather === 'Hot/Sunny' || weather === 'Warm') && drink.temperature === 'both') {
-        score += 10;
-      }
-      if ((weather === 'Cool' || weather === 'Cold' || weather === 'Rainy') && drink.temperature === 'hot') {
-        score += 20;
-        reasons.push('warming hot drink');
-      }
-
-      // Base score for matching type
-      if (drink.type === 'Coffee') score += 10;
-
-      // Cap at 100
-      const matchPercentage = Math.min(score, 100);
-
-      return {
-        drink,
-        matchPercentage,
-        reason: reasons.length > 0 ? reasons.join(', ') : 'good general option',
-      };
-    });
-
-    // Filter out nulls (dietary restrictions failed)
-    const filtered = scoredDrinks.filter((item) => item !== null) as RecommendationResult[];
-
-    // Sort by match percentage
-    filtered.sort((a, b) => b.matchPercentage - a.matchPercentage);
-
-    // Take top 5
-    const topRecommendations = filtered.slice(0, 5);
-
-    if (topRecommendations.length === 0) {
-      Alert.alert('No matches', 'No drinks match your dietary restrictions. Try different options.');
-      return;
-    }
-
-    setRecommendations(topRecommendations);
+    setSubmittedData(data);
     setShowQuestionnaire(false);
   };
 
   const resetQuestionnaire = () => {
     setMood(null);
-    setEnergyLevel(5);
     setTimeOfDay(null);
     setWeather(null);
     setDietaryRestrictions([]);
-    setRecommendations([]);
+    setSubmittedData(null);
     setShowQuestionnaire(true);
   };
 
   if (showQuestionnaire) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <Text style={styles.title}> Find Your Perfect Drink</Text>
-        <Text style={styles.subtitle}>Answer a few questions to get personalized recommendations</Text>
+        <Text style={styles.title}>Find Your Perfect Drink</Text>
+        <Text style={styles.subtitle}>Answer a few questions to get personalised recommendations</Text>
 
-        {/* Mood */}
+        {/* Mood - Simplified to Tired/Not Tired */}
         <View style={styles.section}>
-          <Text style={styles.label}>How are you feeling right now?</Text>
+          <Text style={styles.label}>Mood: Are you tired?</Text>
           <View style={styles.optionsGrid}>
             {moods.map((m) => (
               <TouchableOpacity
@@ -191,30 +91,9 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Energy Level */}
+        {/* Time of Day - Simplified to Morning/Afternoon/Evening */}
         <View style={styles.section}>
-          <Text style={styles.label}>What's your current energy level?</Text>
-          <Text style={styles.sliderValue}>{energyLevel}/10</Text>
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={10}
-            step={1}
-            value={energyLevel}
-            onValueChange={setEnergyLevel}
-            minimumTrackTintColor="#483C32"
-            maximumTrackTintColor="#d3d3d3"
-            thumbTintColor="#282019ff"
-          />
-          <View style={styles.sliderLabels}>
-            <Text style={styles.sliderLabel}>Low energy</Text>
-            <Text style={styles.sliderLabel}>High energy</Text>
-          </View>
-        </View>
-
-        {/* Time of Day */}
-        <View style={styles.section}>
-          <Text style={styles.label}>What time is it?</Text>
+          <Text style={styles.label}>Time:</Text>
           <View style={styles.optionsGrid}>
             {times.map((t) => (
               <TouchableOpacity
@@ -228,9 +107,9 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Weather */}
+        {/* Weather - Simplified to Hot/Warm or Cold */}
         <View style={styles.section}>
-          <Text style={styles.label}>What's the weather like?</Text>
+          <Text style={styles.label}>Weather:</Text>
           <View style={styles.optionsGrid}>
             {weathers.map((w) => (
               <TouchableOpacity
@@ -244,9 +123,9 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Dietary Restrictions */}
+        {/* Dietary Restrictions - Kept the same */}
         <View style={styles.section}>
-          <Text style={styles.label}>Any dietary restrictions? (Optional)</Text>
+          <Text style={styles.label}>Dietary Restrictions: (Optional)</Text>
           <View style={styles.optionsGrid}>
             {restrictions.map((r) => (
               <TouchableOpacity
@@ -264,8 +143,8 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.submitButton} onPress={calculateRecommendations}>
-          <Text style={styles.submitButtonText}>Get Recommendations</Text>
+        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+          <Text style={styles.submitButtonText}>Get Recommendation</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
@@ -275,46 +154,46 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // Show recommendations
+  // Show submitted contextual data (for demo purposes)
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>☕ Your Perfect Matches</Text>
-      <Text style={styles.subtitle}>Based on your preferences</Text>
+      <Text style={styles.title}>Your Contextual Data</Text>
 
-      {recommendations.map((rec, index) => (
-        <View key={rec.drink.id} style={styles.recommendationCard}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.rank}>#{index + 1}</Text>
-            <View style={styles.matchBadge}>
-              <Text style={styles.matchText}>{rec.matchPercentage}% Match</Text>
-            </View>
-          </View>
-
-          {/* For demo: using emoji as placeholder. Replace with rec.drink.image */}
-          <View style={styles.drinkImageContainer}>
-            <Text style={styles.drinkEmoji}>☕</Text>
-          </View>
-
-          <Text style={styles.drinkName}>{rec.drink.name}</Text>
-          <Text style={styles.drinkDescription}>{rec.drink.description}</Text>
-          <Text style={styles.drinkReason}>✨ {rec.reason}</Text>
-
-          <View style={styles.drinkTags}>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{rec.drink.type}</Text>
-            </View>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{rec.drink.caffeine} caffeine</Text>
-            </View>
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{rec.drink.temperature}</Text>
-            </View>
-          </View>
+      <View style={styles.resultCard}>
+        <View style={styles.resultSection}>
+          <Text style={styles.resultLabel}>Mood:</Text>
+          <Text style={styles.resultValue}>{submittedData?.mood}</Text>
         </View>
-      ))}
+
+        <View style={styles.resultSection}>
+          <Text style={styles.resultLabel}>Time of Day:</Text>
+          <Text style={styles.resultValue}>{submittedData?.timeOfDay}</Text>
+        </View>
+
+        <View style={styles.resultSection}>
+          <Text style={styles.resultLabel}>Weather:</Text>
+          <Text style={styles.resultValue}>{submittedData?.weather}</Text>
+        </View>
+
+        <View style={styles.resultSection}>
+          <Text style={styles.resultLabel}>Dietary Restrictions:</Text>
+          {submittedData?.dietaryRestrictions && submittedData.dietaryRestrictions.length > 0 ? (
+            <View style={styles.restrictionsContainer}>
+              {submittedData.dietaryRestrictions.map((restriction) => (
+                <View key={restriction} style={styles.restrictionTag}>
+                  <Text style={styles.restrictionText}>{restriction}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.resultValue}>None</Text>
+          )}
+        </View>
+      </View>
+
 
       <TouchableOpacity style={styles.retakeButton} onPress={resetQuestionnaire}>
-        <Text style={styles.retakeButtonText}>Take Quiz Again</Text>
+        <Text style={styles.retakeButtonText}>Enter New Data</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
@@ -381,27 +260,6 @@ const styles = StyleSheet.create({
     color: '#483C32',
     fontWeight: '600',
   },
-  slider: {
-    width: '100%',
-    height: 40,
-    color: '#483C32',
-  },
-  sliderValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#483C32',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  sliderLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  sliderLabel: {
-    fontSize: 12,
-    color: '#999',
-  },
   submitButton: {
     backgroundColor: '#483C32',
     paddingVertical: 16,
@@ -423,11 +281,11 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
   },
-  recommendationCard: {
+  resultCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
-    marginBottom: 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     shadowColor: '#000',
@@ -436,79 +294,70 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  resultSection: {
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  rank: {
+  resultLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  resultValue: {
     fontSize: 20,
+    color: '#333',
     fontWeight: '700',
-    color: '#7c4dff',
   },
-  matchBadge: {
-    backgroundColor: '#7c4dff',
+  restrictionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  restrictionTag: {
+    backgroundColor: '#c3a994ff',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
-  matchText: {
-    color: '#fff',
+  restrictionText: {
     fontSize: 14,
+    color: '#483C32',
     fontWeight: '600',
   },
-  drinkImageContainer: {
-    alignItems: 'center',
-    marginVertical: 12,
+  demoNote: {
+    backgroundColor: '#fff3cd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#ffb300',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
   },
-  drinkEmoji: {
-    fontSize: 60,
-  },
-  drinkName: {
-    fontSize: 22,
+  demoNoteTitle: {
+    fontSize: 16,
     fontWeight: '700',
-    color: '#333',
-    marginBottom: 6,
+    color: '#856404',
+    marginBottom: 8,
   },
-  drinkDescription: {
+  demoNoteText: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 10,
-  },
-  drinkReason: {
-    fontSize: 14,
-    color: '#7c4dff',
-    fontStyle: 'italic',
-    marginBottom: 12,
-  },
-  drinkTags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    backgroundColor: '#f3e5ff',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#7c4dff',
-    fontWeight: '500',
+    color: '#856404',
+    lineHeight: 20,
   },
   retakeButton: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#7c4dff',
+    borderColor: '#483C32',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   retakeButtonText: {
-    color: '#7c4dff',
+    color: '#483C32',
     fontSize: 16,
     fontWeight: '600',
   },
