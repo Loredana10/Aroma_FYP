@@ -1,4 +1,3 @@
-import Slider from '@react-native-community/slider';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -28,7 +27,7 @@ export default function PersonalisedScreen() {
   const [weather, setWeather] = useState<string | null>(null);
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
 
-  // Simplified options based on supervisor feedback
+  // Options
   const moods = ['Tired', 'Not Tired'];
   const times = ['Morning', 'Afternoon', 'Evening'];
   const weathers = ['Hot/Warm', 'Cold'];
@@ -91,7 +90,7 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Time of Day - Simplified to Morning/Afternoon/Evening */}
+        {/* Time of Day - Morning/Afternoon/Evening */}
         <View style={styles.section}>
           <Text style={styles.label}>Time:</Text>
           <View style={styles.optionsGrid}>
@@ -107,7 +106,7 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Weather - Simplified to Hot/Warm or Cold */}
+        {/* Weather - Hot/Warm or Cold */}
         <View style={styles.section}>
           <Text style={styles.label}>Weather:</Text>
           <View style={styles.optionsGrid}>
@@ -123,7 +122,7 @@ export default function PersonalisedScreen() {
           </View>
         </View>
 
-        {/* Dietary Restrictions - Kept the same */}
+        {/* Dietary Restrictions - Optional */}
         <View style={styles.section}>
           <Text style={styles.label}>Dietary Restrictions: (Optional)</Text>
           <View style={styles.optionsGrid}>
@@ -154,7 +153,7 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // Show submitted contextual data (for demo purposes)
+  // Show submitted contextual data
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Your Contextual Data</Text>

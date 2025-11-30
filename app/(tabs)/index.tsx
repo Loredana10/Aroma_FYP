@@ -62,7 +62,7 @@ export default function Index() {
         <Text style={styles.status}>{message}</Text>
       )}
       <View style={{ marginTop: 30 }}>
-        <Button title="☕ Get Personalized Drink" onPress={() => router.push('/personalised')} />
+        <Button title="☕ Get Personalised Drink" onPress={() => router.push('/personalised')} />
       </View>
     </View>
   );

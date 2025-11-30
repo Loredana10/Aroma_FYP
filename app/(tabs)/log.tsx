@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/auth_context';
-import drinksData from '../assets/data/drinks_catalogue.json';
+import drinksData from '../../assets/data/drinks_catalogue.json';
 
 // Define Drink type based on JSON structure
 interface Drink {
@@ -27,7 +27,7 @@ interface Drink {
   gluten_free: boolean;
 }
 
-// LoggedDrink includes timestamp
+// Includes timestamp
 interface LoggedDrink extends Drink {
   logged_at: string;
 }
@@ -286,7 +286,7 @@ export default function LogScreen() {
                 </TouchableOpacity>
               </ScrollView>
             ) : (
-              // Show drink selection list - FIXED
+              // Show drink selection list
               <FlatList
                 data={drinksData.drinks}
                 renderItem={renderDrinkOption}
