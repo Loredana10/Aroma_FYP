@@ -31,10 +31,10 @@ export default function Index() {
         // Fetch fresh profile
         const fresh = await getDoc(userRef);
         setProfile(fresh.data());
-        setMessage('Firestore connection successful ✅');
+        setMessage('Firestore connection successful');
       } catch (e) {
-        console.error('❌ Error fetching user profile:', e);
-        setMessage('Failed to load your profile ❌');
+        console.error('Error fetching user profile:', e);
+        setMessage('Failed to load your profile');
       } finally {
         setLoading(false);
       }

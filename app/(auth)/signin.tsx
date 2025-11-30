@@ -12,17 +12,17 @@ export default function SignIn() {
     const onSignIn = async () => {
         try {
             await signInWithEmailAndPassword(auth, email.trim(), password);
-            console.log('✅ Signed in successfully');
+            console.log('Signed in successfully');
             router.replace('/(tabs)');
         } catch (e: any) {
-            console.error('❌ Firebase sign-in error:', e);
+            console.error('Firebase sign-in error:', e);
             Alert.alert('Sign in failed', e?.message ?? 'Please try again.');
         }
     };
 
     return (
     <View style={{ flex: 1, gap: 12, padding: 16, justifyContent: 'center' }}>
-        <Text style={{ fontSize: 28, fontWeight: '600', marginBottom: 8 }}>Welcome back</Text>
+        <Text style={{ fontSize: 28, fontWeight: '600', marginBottom: 8, textAlign: 'center' }}>LOG IN</Text>
         <TextInput
         placeholder="Email"
         autoCapitalize="none"

@@ -32,9 +32,9 @@ export default function SignUp() {
 
   return (
     <View style={{ flex: 1, gap: 12, padding: 16, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 28, fontWeight: '600', marginBottom: 8 }}>Create account</Text>
+      <Text style={{ fontSize: 28, fontWeight: '600', marginBottom: 8, textAlign: 'center' }}>Create account</Text>
       <TextInput
-        placeholder="Display name (optional)"
+        placeholder="Display name"
         value={displayName}
         onChangeText={setDisplayName}
         style={{ borderWidth: 1, borderRadius: 8, padding: 12 }}

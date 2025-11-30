@@ -4,7 +4,7 @@
     "slug": "Aroma_FYP",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app_logo.png",
     "scheme": "aromafyp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -17,10 +17,7 @@
       "package": "com.lb.aroma",
       "googleServicesFile": "google-service.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
