@@ -1,7 +1,8 @@
 // firebaseConfig.ts
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { FirebaseApp, getApps, initializeApp } from 'firebase/app';
+import { Auth, getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
+import { Platform } from 'react-native';
 
 // --- CONFIG ---
 const firebaseConfig = {
@@ -10,7 +11,11 @@ const firebaseConfig = {
   projectId: "aroma-15be8",
   storageBucket: "aroma-15be8.appspot.com",
   messagingSenderId: "790836001021",
-  appId: "1:790836001021:android:c07492ce5cffb555b4e694",
+  appId: Platform.select({
+    ios: "1:790836001021:ios:64124773b9ac89d9b4e694",
+    android: "1:790836001021:android:c07492ce5cffb555b4e694",
+    default: "1:790836001021:android:c07492ce5cffb555b4e694",
+  }),
 };
 
 // --- Initialize the app (singleton) ---
@@ -23,3 +28,4 @@ const auth: Auth = getAuth(app);
 const db = getFirestore(app);
 
 export { app, auth, db };
+

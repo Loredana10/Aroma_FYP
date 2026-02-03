@@ -2,7 +2,7 @@
   "project_info": {
     "project_number": "790836001021",
     "project_id": "aroma-15be8",
-    "storage_bucket": "aroma-15be8.appspot.com"
+    "storage_bucket": "aroma-15be8.firebasestorage.app"
   },
   "client": [
     {
@@ -12,7 +12,12 @@
           "package_name": "com.lb.aroma"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "790836001021-rr2n97tmdge2mrglh7apojvm49ce1k9s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCnFrA746eqOSEibgwiKkzubjC4vaTbPEE"
@@ -20,7 +25,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "790836001021-rr2n97tmdge2mrglh7apojvm49ce1k9s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "790836001021-lvovthv0muoi1vkm8ask6ohofn4lp3r9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.lb.aroma"
+              }
+            }
+          ]
         }
       }
     }
