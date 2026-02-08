@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "790836001021",
+    "project_id": "aroma-15be8",
+    "storage_bucket": "aroma-15be8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:790836001021:android:c07492ce5cffb555b4e694",
+        "android_client_info": {
+          "package_name": "com.lb.aroma"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "790836001021-a7u9pndff5p4gjh078avbhnp1fv4qi97.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lb.aroma",
+            "certificate_hash": "a7b8741357b1214af00f260e8dbaf00cdc8656a5"
+          }
+        },
+        {
+          "client_id": "790836001021-rr2n97tmdge2mrglh7apojvm49ce1k9s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnFrA746eqOSEibgwiKkzubjC4vaTbPEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "790836001021-rr2n97tmdge2mrglh7apojvm49ce1k9s.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "790836001021-lvovthv0muoi1vkm8ask6ohofn4lp3r9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.lb.aroma"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
