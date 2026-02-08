@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.lb.aroma",
-      "googleServicesFile": "google-service.json",
+      "googleServicesFile": "google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
@@ -45,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "831ebffe-cca0-4b65-8b88-4643d4ceb6d9"
+      }
     }
   }
 }
