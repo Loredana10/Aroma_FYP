@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "790836001021-pp988qq7ck46k9hfl443f5jgcdd4pt6g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lb.aroma",
+            "certificate_hash": "3cb5d143bac31411c943339836c3cacb1d7f714b"
+          }
+        },
+        {
           "client_id": "790836001021-rr2n97tmdge2mrglh7apojvm49ce1k9s.apps.googleusercontent.com",
           "client_type": 3
         }
