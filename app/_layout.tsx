@@ -3,9 +3,11 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/firebaseConfig';
 
 export const unstable_settings = {
   initialRouteName: '(auth)',
@@ -16,23 +18,53 @@ function RouterStack() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // Check profile completion status only once when user changes
   useEffect(() => {
-    if (loading) return;
+    const checkProfile = async () => {
+      if (!user) {
+        setProfileCompleted(null);
+        setInitialCheckDone(true);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const completed = userDoc.exists() ? userDoc.data()?.profileCompleted ?? true : true;
+        setProfileCompleted(completed);
+      } catch (error) {
+        console.error('Error checking profile:', error);
+        setProfileCompleted(true); // Default to true on error
+      } finally {
+        setInitialCheckDone(true);
+      }
+    };
+
+    checkProfile();
+  }, [user?.uid]); // Only re-run when user ID changes
+
+  // Handle navigation based on auth and profile status
+  useEffect(() => {
+    if (loading || !initialCheckDone) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const onCompleteProfile = segments[segments.length - 1] === 'complete-profile';
 
     if (!user && !inAuthGroup) {
-      // Redirect to sign-in if not authenticated
+      // Not logged in - go to sign in
       router.replace('/(auth)/signin');
-    } else if (user && inAuthGroup) {
-      // Redirect to main app if authenticated
+    } else if (user && profileCompleted === false && !onCompleteProfile) {
+      // Logged in but profile incomplete - go to complete profile
+      router.replace('/(auth)/complete-profile');
+    } else if (user && profileCompleted === true && inAuthGroup && !onCompleteProfile) {
+      // Logged in with complete profile but in auth section - go to app
       router.replace('/(tabs)');
     }
-  }, [user, loading, segments, router]);
+  }, [user, loading, profileCompleted, initialCheckDone, segments]);
 
-  // Show loading screen while checking auth state
-  if (loading) {
+  if (loading || !initialCheckDone) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <ActivityIndicator size="large" />

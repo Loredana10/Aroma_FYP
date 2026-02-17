@@ -1,10 +1,14 @@
 // firebaseConfig.ts
 import { FirebaseApp, getApps, initializeApp } from 'firebase/app';
-import { Auth, getAuth } from 'firebase/auth';
+import { Auth, getAuth, initializeAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- CONFIG ---
+// Import with @ts-ignore to bypass TypeScript errors
+// @ts-ignore - getReactNativePersistence exists but TypeScript definitions may be incomplete
+import { getReactNativePersistence } from 'firebase/auth';
+
 const firebaseConfig = {
   apiKey: "AIzaSyCnFrA746eqOSEibgwiKkzubjC4vaTbPEE",
   authDomain: "aroma-15be8.firebaseapp.com",
@@ -18,14 +22,18 @@ const firebaseConfig = {
   }),
 };
 
-// --- Initialize the app (singleton) ---
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0]!;
 
-// --- Auth ---
-const auth: Auth = getAuth(app);
+let auth: Auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} catch (error) {
+  // If already initialized, just get it
+  auth = getAuth(app);
+}
 
-// --- Firestore ---
 const db = getFirestore(app);
 
 export { app, auth, db };
-
