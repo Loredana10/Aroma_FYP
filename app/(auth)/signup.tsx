@@ -8,6 +8,7 @@ import {
   Alert,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
@@ -47,7 +48,6 @@ export default function SignUp() {
         provider: 'email',
         profileCompleted: false,
       });
-      // Redirect to complete profile
       router.replace('/(auth)/complete-profile');
     } catch (e: any) {
       Alert.alert('Sign up failed', e.message);
@@ -69,7 +69,7 @@ export default function SignUp() {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
       const { data } = await GoogleSignin.signIn();
-      
+
       if (!data?.idToken) throw new Error('Google Sign-In failed');
 
       const credential = GoogleAuthProvider.credential(data.idToken);
@@ -87,10 +87,8 @@ export default function SignUp() {
           provider: 'google',
           profileCompleted: false,
         });
-        // Redirect to complete profile for new Google users
         router.replace('/(auth)/complete-profile');
-      } else{
-        // existing user
+      } else {
         router.replace('/(tabs)');
       }
     } catch (error: any) {
@@ -105,54 +103,63 @@ export default function SignUp() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Create account</Text>
-      <TextInput 
-        placeholder="Display name" 
-        value={displayName} 
-        onChangeText={setDisplayName} 
-        style={styles.input} 
-        editable={!loading} 
+      <TextInput
+        placeholder="Display name"
+        value={displayName}
+        onChangeText={setDisplayName}
+        style={styles.input}
+        editable={!loading}
       />
-      <TextInput 
-        placeholder="Email" 
-        autoCapitalize="none" 
-        keyboardType="email-address" 
-        value={email} 
-        onChangeText={setEmail} 
-        style={styles.input} 
-        editable={!loading} 
+      <TextInput
+        placeholder="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+        style={styles.input}
+        editable={!loading}
       />
-      <TextInput 
-        placeholder="Password" 
-        secureTextEntry 
-        value={password} 
-        onChangeText={setPassword} 
-        style={styles.input} 
-        editable={!loading} 
+      <TextInput
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        style={styles.input}
+        editable={!loading}
       />
-      <Button 
-        title={loading ? 'Creating account...' : 'Sign up'} 
-        onPress={onSignUp} 
-        disabled={loading} 
+      <Button
+        title={loading ? 'Creating account...' : 'Sign up'}
+        onPress={onSignUp}
+        disabled={loading}
       />
-      
+
       <View style={styles.divider}>
         <View style={styles.dividerLine} />
         <Text style={styles.dividerText}>OR</Text>
         <View style={styles.dividerLine} />
       </View>
 
-      <TouchableOpacity 
-        style={[styles.googleButton, !isGoogleAvailable && styles.googleButtonDisabled]} 
-        onPress={onGoogleSignUp} 
+      <TouchableOpacity
+        style={[styles.googleButton, loading && styles.googleButtonDisabled]}
+        onPress={onGoogleSignUp}
         disabled={loading}
+        activeOpacity={0.85}
       >
-        <Text style={styles.googleButtonText}>
-          🔵 Continue with Google {!isGoogleAvailable && '(Native build required)'}
-        </Text>
+        <View style={styles.googleIconContainer}>
+          <Image
+            source={require('@/assets/images/search.png')}
+            style={styles.googleIcon}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={styles.googleButtonText}>Sign up with Google</Text>
       </TouchableOpacity>
 
       <Text style={styles.signinText}>
-        Already have an account? <Link href="/(auth)/signin" style={{color: '#4285F4'}}>Sign in</Link>
+        Already have an account?{' '}
+        <Link href="/(auth)/signin" style={{ color: '#4285F4' }}>
+          Sign in
+        </Link>
       </Text>
     </View>
   );
@@ -166,7 +173,42 @@ const styles = StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#ddd' },
   dividerText: { marginHorizontal: 10, color: '#666', fontWeight: '500' },
-  googleButton: { backgroundColor: '#4285F4', padding: 14, borderRadius: 8, alignItems: 'center' },
-  googleButtonDisabled: { backgroundColor: '#999' },
-  googleButtonText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    borderRadius: 4,
+    height: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+  googleIconContainer: {
+    width: 46,
+    height: 46,
+    borderRightWidth: 1,
+    borderRightColor: '#dadce0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    width: 22,
+    height: 22,
+  },
+  googleButtonText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#3c4043',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0.25,
+    paddingRight: 46,
+  },
 });

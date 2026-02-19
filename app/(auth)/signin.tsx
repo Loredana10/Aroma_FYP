@@ -8,6 +8,7 @@ import {
   Alert,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -37,11 +38,10 @@ export default function SignIn() {
     try {
       setLoading(true);
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      
-      // Check if profile is complete
+
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
-      
+
       if (userSnap.exists() && !userSnap.data().profileCompleted) {
         router.replace('/(auth)/complete-profile');
       } else {
@@ -66,7 +66,7 @@ export default function SignIn() {
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      
+
       const { data } = await GoogleSignin.signIn();
       const idToken = data?.idToken;
 
@@ -74,13 +74,11 @@ export default function SignIn() {
 
       const googleCredential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, googleCredential);
-      
-      // Check if user document exists
+
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
 
       if (!userSnap.exists()) {
-        // Brand new user - create document and go to onboarding
         await setDoc(userRef, {
           email: userCredential.user.email,
           displayName: userCredential.user.displayName,
@@ -91,10 +89,8 @@ export default function SignIn() {
         });
         router.replace('/(auth)/complete-profile');
       } else if (userSnap.data().profileCompleted === false) {
-        // Existing user who hasn't completed profile
         router.replace('/(auth)/complete-profile');
       } else {
-        // Existing user with completed profile
         router.replace('/(tabs)');
       }
     } catch (error: any) {
@@ -127,25 +123,34 @@ export default function SignIn() {
         editable={!loading}
       />
       <Button title={loading ? 'Signing in...' : 'Sign in'} onPress={onSignIn} disabled={loading} />
-      
+
       <View style={styles.divider}>
         <View style={styles.dividerLine} />
         <Text style={styles.dividerText}>OR</Text>
         <View style={styles.dividerLine} />
       </View>
 
-      <TouchableOpacity 
-        style={[styles.googleButton, !isGoogleAvailable && styles.googleButtonDisabled]} 
-        onPress={onGoogleSignIn} 
+      <TouchableOpacity
+        style={[styles.googleButton, loading && styles.googleButtonDisabled]}
+        onPress={onGoogleSignIn}
         disabled={loading}
+        activeOpacity={0.85}
       >
-        <Text style={styles.googleButtonText}>
-          🔵 Continue with Google {!isGoogleAvailable && '(Native build required)'}
-        </Text>
+        <View style={styles.googleIconContainer}>
+          <Image
+            source={require('@/assets/images/search.png')}
+            style={styles.googleIcon}
+            resizeMode="contain"
+          />
+        </View>
+        <Text style={styles.googleButtonText}>Sign in with Google</Text>
       </TouchableOpacity>
 
       <Text style={styles.signupText}>
-        New here? <Link href="/(auth)/signup" style={{color: '#4285F4'}}>Create an account</Link>
+        New here?{' '}
+        <Link href="/(auth)/signup" style={{ color: '#4285F4' }}>
+          Create an account
+        </Link>
       </Text>
     </View>
   );
@@ -159,7 +164,42 @@ const styles = StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#ddd' },
   dividerText: { marginHorizontal: 10, color: '#666', fontWeight: '500' },
-  googleButton: { backgroundColor: '#4285F4', padding: 14, borderRadius: 8, alignItems: 'center' },
-  googleButtonDisabled: { backgroundColor: '#999' },
-  googleButtonText: { color: 'white', fontSize: 16, fontWeight: '600' },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    borderRadius: 4,
+    height: 48,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+  googleIconContainer: {
+    width: 46,
+    height: 46,
+    borderRightWidth: 1,
+    borderRightColor: '#dadce0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    width: 22,
+    height: 22,
+  },
+  googleButtonText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#3c4043',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0.25,
+    paddingRight: 46,
+  },
 });
