@@ -13,6 +13,7 @@ import {
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/firebaseConfig';
+import { syncUserToDatabase } from '@/constants/api';
 
 // Conditionally import Google Sign-In
 let GoogleSignin: any;
@@ -38,6 +39,13 @@ export default function SignIn() {
     try {
       setLoading(true);
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      // Sync user to PostgreSQL (creates if new, skips if already exists)
+      await syncUserToDatabase(
+        userCredential.user.uid,
+        userCredential.user.email,
+        userCredential.user.displayName
+      );
 
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
@@ -74,6 +82,13 @@ export default function SignIn() {
 
       const googleCredential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, googleCredential);
+
+      // Sync user to PostgreSQL
+      await syncUserToDatabase(
+        userCredential.user.uid,
+        userCredential.user.email,
+        userCredential.user.displayName
+      );
 
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
@@ -178,9 +193,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  googleButtonDisabled: {
-    opacity: 0.6,
-  },
+  googleButtonDisabled: { opacity: 0.6 },
   googleIconContainer: {
     width: 46,
     height: 46,
@@ -189,10 +202,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  googleIcon: {
-    width: 22,
-    height: 22,
-  },
+  googleIcon: { width: 22, height: 22 },
   googleButtonText: {
     flex: 1,
     textAlign: 'center',

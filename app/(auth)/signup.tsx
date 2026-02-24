@@ -13,6 +13,7 @@ import {
 import { createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/firebaseConfig';
+import { syncUserToDatabase } from '@/constants/api';
 
 // Conditionally import Google Sign-In
 let GoogleSignin: any;
@@ -41,6 +42,13 @@ export default function SignUp() {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
       if (displayName) await updateProfile(cred.user, { displayName });
 
+      // Sync new user to PostgreSQL
+      await syncUserToDatabase(
+        cred.user.uid,
+        cred.user.email,
+        displayName || null
+      );
+
       await setDoc(doc(db, 'users', cred.user.uid), {
         email: cred.user.email,
         displayName: displayName || null,
@@ -48,6 +56,7 @@ export default function SignUp() {
         provider: 'email',
         profileCompleted: false,
       });
+
       router.replace('/(auth)/complete-profile');
     } catch (e: any) {
       Alert.alert('Sign up failed', e.message);
@@ -74,6 +83,13 @@ export default function SignUp() {
 
       const credential = GoogleAuthProvider.credential(data.idToken);
       const userCredential = await signInWithCredential(auth, credential);
+
+      // Sync user to PostgreSQL
+      await syncUserToDatabase(
+        userCredential.user.uid,
+        userCredential.user.email,
+        userCredential.user.displayName
+      );
 
       const userRef = doc(db, 'users', userCredential.user.uid);
       const userSnap = await getDoc(userRef);
@@ -187,9 +203,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  googleButtonDisabled: {
-    opacity: 0.6,
-  },
+  googleButtonDisabled: { opacity: 0.6 },
   googleIconContainer: {
     width: 46,
     height: 46,
@@ -198,10 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  googleIcon: {
-    width: 22,
-    height: 22,
-  },
+  googleIcon: { width: 22, height: 22 },
   googleButtonText: {
     flex: 1,
     textAlign: 'center',

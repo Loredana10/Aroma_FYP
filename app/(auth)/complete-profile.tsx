@@ -14,17 +14,36 @@ import {
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 import { useAuth } from '@/contexts/auth_context';
+import { API_BASE_URL } from '@/constants/api';
+
+// Convert a numeric age to the age range string used in the database
+const getAgeRange = (age: number): string => {
+  if (age < 18)  return 'Under 18';
+  if (age <= 24) return '18-24';
+  if (age <= 34) return '25-34';
+  if (age <= 44) return '35-44';
+  if (age <= 54) return '45-54';
+  return '55+';
+};
 
 export default function CompleteProfile() {
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  
+
   const [gender, setGender] = useState('');
   const [age, setAge] = useState('');
+  const [coffeeFrequency, setCoffeeFrequency] = useState('');
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
 
   const genderOptions = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
+  const frequencyOptions = [
+    'Every day',
+    'A few times a week',
+    'Once a week',
+    'A few times a month',
+    'Rarely',
+  ];
   const dietaryOptions = [
     'None',
     'Lactose Intolerant',
@@ -59,6 +78,10 @@ export default function CompleteProfile() {
       Alert.alert('Invalid Age', 'Please enter a valid age between 1 and 120.');
       return;
     }
+    if (!coffeeFrequency) {
+      Alert.alert('Missing Information', 'Please select how often you drink coffee.');
+      return;
+    }
     if (dietaryRestrictions.length === 0) {
       Alert.alert('Missing Information', 'Please select at least one dietary option (or "None").');
       return;
@@ -68,18 +91,37 @@ export default function CompleteProfile() {
       setLoading(true);
       if (!user) throw new Error('No user found');
 
-      // Update user profile in Firestore
+      const ageNumber = Number(age);
+      const ageRange = getAgeRange(ageNumber);
+
+      // 1. Update Firestore
       await updateDoc(doc(db, 'users', user.uid), {
         gender,
-        age: Number(age),
+        age: ageNumber,
+        ageRange,
+        coffeeFrequency,
         dietaryRestrictions,
         profileCompleted: true,
       });
 
-      // Small delay to ensure Firestore write completes
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      router.replace('/(tabs)');
+      // 2. Update PostgreSQL with age_range and coffee_frequency
+      try {
+        await fetch(`${API_BASE_URL}/api/users/${user.uid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            age_range: ageRange,
+            coffee_frequency: coffeeFrequency,
+            gender: gender,
+          }),
+        });
+      } catch (apiError) {
+        // Non-fatal — Firestore already saved, PostgreSQL will sync later
+        console.error('Failed to update PostgreSQL profile:', apiError);
+      }
+      // Navigation handled automatically by the layout's onSnapshot listener
+      // When profileCompleted flips to true in Firestore, layout redirects to /(tabs)
+
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -93,34 +135,26 @@ export default function CompleteProfile() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.greeting}>Hello, {displayName}! 👋</Text>
       <Text style={styles.subtitle}>
-        Welcome to Aroma! We need a few more details to personalize your coffee experience.
+        Welcome to Aroma! We need a few more details to personalise your coffee experience.
       </Text>
 
-      {/* Gender Selection */}
+      {/* Gender */}
       <Text style={styles.label}>Gender</Text>
       <View style={styles.optionsContainer}>
         {genderOptions.map((option) => (
           <TouchableOpacity
             key={option}
-            style={[
-              styles.optionButton,
-              gender === option && styles.optionButtonSelected,
-            ]}
+            style={[styles.optionButton, gender === option && styles.optionButtonSelected]}
             onPress={() => setGender(option)}
           >
-            <Text
-              style={[
-                styles.optionText,
-                gender === option && styles.optionTextSelected,
-              ]}
-            >
+            <Text style={[styles.optionText, gender === option && styles.optionTextSelected]}>
               {option}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Age Input */}
+      {/* Age */}
       <Text style={styles.label}>Age</Text>
       <TextInput
         placeholder="Enter your age"
@@ -130,6 +164,28 @@ export default function CompleteProfile() {
         style={styles.input}
         maxLength={3}
       />
+      {/* Show the age range preview as the user types */}
+      {age && !isNaN(Number(age)) && Number(age) > 0 && (
+        <Text style={styles.ageRangePreview}>
+          Age range: {getAgeRange(Number(age))}
+        </Text>
+      )}
+
+      {/* Coffee Frequency */}
+      <Text style={styles.label}>How often do you drink coffee or tea?</Text>
+      <View style={styles.optionsContainer}>
+        {frequencyOptions.map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[styles.optionButton, coffeeFrequency === option && styles.optionButtonSelected]}
+            onPress={() => setCoffeeFrequency(option)}
+          >
+            <Text style={[styles.optionText, coffeeFrequency === option && styles.optionTextSelected]}>
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {/* Dietary Restrictions */}
       <Text style={styles.label}>Dietary Restrictions</Text>
@@ -210,6 +266,13 @@ const styles = StyleSheet.create({
     padding: 15,
     fontSize: 16,
     backgroundColor: '#f9f9f9',
+  },
+  ageRangePreview: {
+    fontSize: 13,
+    color: '#4285F4',
+    fontWeight: '500',
+    marginTop: 6,
+    marginLeft: 4,
   },
   optionsContainer: {
     flexDirection: 'row',

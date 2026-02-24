@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 
 export const unstable_settings = {
@@ -21,29 +21,35 @@ function RouterStack() {
   const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Check profile completion status only once when user changes
+  // Use onSnapshot instead of getDoc so the layout reacts
+  // immediately when profileCompleted changes in Firestore
   useEffect(() => {
-    const checkProfile = async () => {
-      if (!user) {
-        setProfileCompleted(null);
-        setInitialCheckDone(true);
-        return;
-      }
+    if (!user) {
+      setProfileCompleted(null);
+      setInitialCheckDone(true);
+      return;
+    }
 
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        const completed = userDoc.exists() ? userDoc.data()?.profileCompleted ?? true : true;
+    // Subscribe to real-time updates on the user's Firestore doc
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', user.uid),
+      (userDoc) => {
+        const completed = userDoc.exists()
+          ? userDoc.data()?.profileCompleted ?? true
+          : true;
         setProfileCompleted(completed);
-      } catch (error) {
-        console.error('Error checking profile:', error);
-        setProfileCompleted(true); // Default to true on error
-      } finally {
+        setInitialCheckDone(true);
+      },
+      (error) => {
+        console.error('Error watching profile:', error);
+        setProfileCompleted(true);
         setInitialCheckDone(true);
       }
-    };
+    );
 
-    checkProfile();
-  }, [user?.uid]); // Only re-run when user ID changes
+    // Unsubscribe when user changes or component unmounts
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   // Handle navigation based on auth and profile status
   useEffect(() => {
@@ -53,13 +59,11 @@ function RouterStack() {
     const onCompleteProfile = segments[segments.length - 1] === 'complete-profile';
 
     if (!user && !inAuthGroup) {
-      // Not logged in - go to sign in
       router.replace('/(auth)/signin');
     } else if (user && profileCompleted === false && !onCompleteProfile) {
-      // Logged in but profile incomplete - go to complete profile
       router.replace('/(auth)/complete-profile');
-    } else if (user && profileCompleted === true && inAuthGroup && !onCompleteProfile) {
-      // Logged in with complete profile but in auth section - go to app
+    } else if (user && profileCompleted === true && inAuthGroup) {
+      // Profile is now complete — go to the app
       router.replace('/(tabs)');
     }
   }, [user, loading, profileCompleted, initialCheckDone, segments]);
