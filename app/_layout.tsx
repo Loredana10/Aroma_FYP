@@ -8,9 +8,35 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
+import { Colors } from '@/constants/theme';
 
 export const unstable_settings = {
   initialRouteName: '(auth)',
+};
+
+// Custom navigation themes using Aroma brown palette
+const AromaLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary:    '#a67c52',
+    background: '#fdf8f4',
+    card:       '#ffffff',
+    text:       '#2d1f12',
+    border:     '#e8d5c0',
+  },
+};
+
+const AromaDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary:    '#c09a70',
+    background: '#2d1f12',
+    card:       '#4a3320',
+    text:       '#fdf8f4',
+    border:     '#6f4e2e',
+  },
 };
 
 function RouterStack() {
@@ -20,17 +46,14 @@ function RouterStack() {
   const router = useRouter();
   const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const C = Colors[colorScheme ?? 'light'];
 
-  // Use onSnapshot instead of getDoc so the layout reacts
-  // immediately when profileCompleted changes in Firestore
   useEffect(() => {
     if (!user) {
       setProfileCompleted(null);
       setInitialCheckDone(true);
       return;
     }
-
-    // Subscribe to real-time updates on the user's Firestore doc
     const unsubscribe = onSnapshot(
       doc(db, 'users', user.uid),
       (userDoc) => {
@@ -46,15 +69,11 @@ function RouterStack() {
         setInitialCheckDone(true);
       }
     );
-
-    // Unsubscribe when user changes or component unmounts
     return () => unsubscribe();
   }, [user?.uid]);
 
-  // Handle navigation based on auth and profile status
   useEffect(() => {
     if (loading || !initialCheckDone) return;
-
     const inAuthGroup = segments[0] === '(auth)';
     const onCompleteProfile = segments[segments.length - 1] === 'complete-profile';
 
@@ -63,27 +82,29 @@ function RouterStack() {
     } else if (user && profileCompleted === false && !onCompleteProfile) {
       router.replace('/(auth)/complete-profile');
     } else if (user && profileCompleted === true && inAuthGroup) {
-      // Profile is now complete — go to the app
       router.replace('/(tabs)');
     }
   }, [user, loading, profileCompleted, initialCheckDone, segments]);
 
   if (loading || !initialCheckDone) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.background }}>
+        <ActivityIndicator size="large" color={C.primary} />
       </View>
     );
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? AromaDarkTheme : AromaLightTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
+        <Stack.Screen
+          name="modal"
+          options={{ presentation: 'modal', headerShown: true, title: '' }}
+        />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
     </ThemeProvider>
   );
 }

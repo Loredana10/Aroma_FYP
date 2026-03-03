@@ -11,7 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.lb.aroma",
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "config": {
+        "googleMapsApiKey": "AIzaSyDsz1TvuJKba2UdMbEgrgNBJW89CcMJI6A"
+      }
     },
     "android": {
       "package": "com.lb.aroma",
@@ -20,7 +23,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDJDevRkFdgb0DcIdwlpa4hiyw0P1H4_os"
+        }
+      }
     },
     "web": {
       "output": "static",
@@ -39,6 +47,13 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Aroma needs your location to show nearby cafés.",
+          "locationWhenInUsePermission": "Aroma needs your location to show nearby cafés."
         }
       ]
     ],

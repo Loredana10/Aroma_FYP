@@ -1,92 +1,113 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal,
-  FlatList, Alert, ActivityIndicator, ScrollView,
+  FlatList, Alert, ActivityIndicator, ScrollView, SectionList,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/auth_context';
 import { API_BASE_URL } from '@/constants/api';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 
 interface Drink {
-  drink_id: number;
-  name: string;
-  category: string;
-  type: string;
-  base: string;
-  caffeine_mg: number;
-  shots: number;
-  dairy_free: boolean;
-  vegan: boolean;
-  gluten_free: boolean;
+  drink_id: number; name: string; category: string; type: string;
+  base: string; caffeine_mg: number; shots: number;
+  dairy_free: boolean; vegan: boolean; gluten_free: boolean;
   milk_alternative_available: boolean;
 }
 
 interface LoggedDrink extends Drink {
-  logged_at: string;
-  user_rating?: number;      // the current user's rating (1-5), if given
+  logged_at: string; user_rating?: number; log_id?: number;
 }
 
 interface DrinkAverage {
-  drink_id: number;
-  avg_rating: number;
-  rating_count: number;
+  drink_id: number; avg_rating: number; rating_count: number;
 }
 
-// ─── STAR COMPONENT ───────────────────────────────────────────────────────────
+interface DaySection {
+  title: string; dateKey: string; totalCaffeine: number; data: LoggedDrink[];
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+
+const toDateKey = (iso: string) => iso.slice(0, 10);
+
+const formatSectionTitle = (dateKey: string) => {
+  const today     = toDateKey(new Date().toISOString());
+  const yesterday = toDateKey(new Date(Date.now() - 86400000).toISOString());
+  if (dateKey === today)     return 'Today';
+  if (dateKey === yesterday) return 'Yesterday';
+  return new Date(dateKey).toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+const groupByDay = (drinks: LoggedDrink[]): DaySection[] => {
+  const map: Record<string, LoggedDrink[]> = {};
+  drinks.forEach((d) => {
+    const key = toDateKey(d.logged_at);
+    if (!map[key]) map[key] = [];
+    map[key].push(d);
+  });
+  return Object.keys(map).sort((a, b) => b.localeCompare(a)).map((key) => ({
+    title: formatSectionTitle(key), dateKey: key,
+    totalCaffeine: map[key].reduce((s, d) => s + d.caffeine_mg, 0),
+    data: map[key],
+  }));
+};
+
+const getCurrentWeekSections = (sections: DaySection[]) => {
+  const now  = new Date();
+  const day  = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - diff);
+  monday.setHours(0, 0, 0, 0);
+  return sections.filter((s) => new Date(s.dateKey) >= monday);
+};
+
+// ─── STARS ───────────────────────────────────────────────────────────────────
 
 const Stars = ({
-  rating,
-  size = 16,
-  interactive = false,
-  onRate,
-}: {
-  rating: number;
-  size?: number;
-  interactive?: boolean;
-  onRate?: (r: number) => void;
-}) => (
+  rating, size = 16, interactive = false, onRate, activeColor,
+}: { rating: number; size?: number; interactive?: boolean; onRate?: (r: number) => void; activeColor: string }) => (
   <View style={{ flexDirection: 'row', gap: 2 }}>
-    {[1, 2, 3, 4, 5].map((star) => (
-      <TouchableOpacity
-        key={star}
-        disabled={!interactive}
-        onPress={() => onRate?.(star)}
-        activeOpacity={0.7}
-      >
-        <Text style={{ fontSize: size, color: star <= Math.round(rating) ? '#f5a623' : '#ddd' }}>
-          ★
-        </Text>
+    {[1,2,3,4,5].map((star) => (
+      <TouchableOpacity key={star} disabled={!interactive} onPress={() => onRate?.(star)} activeOpacity={0.7}>
+        <Text style={{ fontSize: size, color: star <= Math.round(rating) ? activeColor : '#d0d0d0' }}>★</Text>
       </TouchableOpacity>
     ))}
   </View>
 );
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export default function LogScreen() {
   const { user } = useAuth();
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme ?? 'light'];
+  const s = makeStyles(C);
 
-  const [loggedDrinks, setLoggedDrinks] = useState<LoggedDrink[]>([]);
-  const [allDrinks, setAllDrinks] = useState<Drink[]>([]);
-  const [filteredDrinks, setFilteredDrinks] = useState<Drink[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [loggedDrinks,     setLoggedDrinks]     = useState<LoggedDrink[]>([]);
+  const [allDrinks,        setAllDrinks]        = useState<Drink[]>([]);
+  const [filteredDrinks,   setFilteredDrinks]   = useState<Drink[]>([]);
+  const [categories,       setCategories]       = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [averages, setAverages] = useState<Record<number, DrinkAverage>>({});
-  const [userRatings, setUserRatings] = useState<Record<number, number>>({});
+  const [averages,         setAverages]         = useState<Record<number, DrinkAverage>>({});
+  const [userRatings,      setUserRatings]      = useState<Record<number, number>>({});
+  const [showWeekOnly,     setShowWeekOnly]     = useState(true);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [selectedDrink, setSelectedDrink] = useState<Drink | null>(null);
-  const [loadingDrinks, setLoadingDrinks] = useState(false);
-  const [drinksError, setDrinksError] = useState<string | null>(null);
+  const [addModalVisible,    setAddModalVisible]    = useState(false);
+  const [selectedDrink,      setSelectedDrink]      = useState<Drink | null>(null);
+  const [loadingDrinks,      setLoadingDrinks]      = useState(false);
+  const [drinksError,        setDrinksError]        = useState<string | null>(null);
 
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
-  const [drinkToRate, setDrinkToRate] = useState<LoggedDrink | null>(null);
-  const [pendingRating, setPendingRating] = useState(0);
-  const [savingRating, setSavingRating] = useState(false);
+  const [drinkToRate,        setDrinkToRate]        = useState<LoggedDrink | null>(null);
+  const [pendingRating,      setPendingRating]      = useState(0);
+  const [savingRating,       setSavingRating]       = useState(false);
 
-  // ─── LOAD ON MOUNT ──────────────────────────────────────────────────────────
+  // ─── LOAD ──────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     loadLoggedDrinks();
@@ -100,29 +121,22 @@ export default function LogScreen() {
 
   useEffect(() => {
     setFilteredDrinks(
-      selectedCategory === 'All'
-        ? allDrinks
-        : allDrinks.filter((d) => d.category === selectedCategory)
+      selectedCategory === 'All' ? allDrinks : allDrinks.filter((d) => d.category === selectedCategory)
     );
   }, [selectedCategory, allDrinks]);
 
-  // ─── API CALLS ──────────────────────────────────────────────────────────────
+  // ─── API ───────────────────────────────────────────────────────────────────
 
   const fetchDrinks = async () => {
-    setLoadingDrinks(true);
-    setDrinksError(null);
+    setLoadingDrinks(true); setDrinksError(null);
     try {
       const res = await fetch(`${API_BASE_URL}/api/drinks`);
-      if (!res.ok) throw new Error('Server error');
+      if (!res.ok) throw new Error();
       const data: Drink[] = await res.json();
-      setAllDrinks(data);
-      setFilteredDrinks(data);
+      setAllDrinks(data); setFilteredDrinks(data);
       setCategories(['All', ...Array.from(new Set(data.map((d) => d.category)))]);
-    } catch {
-      setDrinksError('Could not load drinks. Is the server running?');
-    } finally {
-      setLoadingDrinks(false);
-    }
+    } catch { setDrinksError('Could not load drinks. Is the server running?'); }
+    finally  { setLoadingDrinks(false); }
   };
 
   const fetchAverages = async () => {
@@ -133,9 +147,7 @@ export default function LogScreen() {
       const map: Record<number, DrinkAverage> = {};
       data.forEach((d) => { map[d.drink_id] = d; });
       setAverages(map);
-    } catch {
-      // Non-fatal — averages just won't show
-    }
+    } catch {}
   };
 
   const fetchUserRatings = async () => {
@@ -147,13 +159,8 @@ export default function LogScreen() {
       const map: Record<number, number> = {};
       data.forEach((r) => { map[r.drink_id] = r.star_rating; });
       setUserRatings(map);
-      // Sync existing ratings into any already-loaded logged drinks
-      setLoggedDrinks((prev) =>
-        prev.map((d) => ({ ...d, user_rating: map[d.drink_id] ?? d.user_rating }))
-      );
-    } catch {
-      // Non-fatal
-    }
+      setLoggedDrinks((prev) => prev.map((d) => ({ ...d, user_rating: map[d.drink_id] ?? d.user_rating })));
+    } catch {}
   };
 
   const submitRating = async (drinkId: number, rating: number) => {
@@ -161,153 +168,125 @@ export default function LogScreen() {
     setSavingRating(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/ratings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.uid,
-          drink_id: drinkId,
-          star_rating: rating,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.uid, drink_id: drinkId, star_rating: rating }),
       });
-      if (!res.ok) throw new Error('Failed to save rating');
-
-      // Update the logged drink's user_rating in state and AsyncStorage
-      const updated = loggedDrinks.map((d) =>
-        d.drink_id === drinkId ? { ...d, user_rating: rating } : d
-      );
-      setLoggedDrinks(updated);
-      saveLoggedDrinks(updated);
-
-      // Refresh averages so the card updates
+      if (!res.ok) throw new Error();
+      const updated = loggedDrinks.map((d) => d.drink_id === drinkId ? { ...d, user_rating: rating } : d);
+      setLoggedDrinks(updated); saveLoggedDrinks(updated);
+      setUserRatings((prev) => ({ ...prev, [drinkId]: rating }));
       fetchAverages();
-
-    } catch {
-      Alert.alert('Error', 'Could not save rating. Please try again.');
-    } finally {
-      setSavingRating(false);
-    }
+    } catch { Alert.alert('Error', 'Could not save rating. Please try again.'); }
+    finally  { setSavingRating(false); }
   };
 
-  // ─── ASYNC STORAGE ──────────────────────────────────────────────────────────
+  // ─── STORAGE ───────────────────────────────────────────────────────────────
 
   const loadLoggedDrinks = async () => {
     if (!user) return;
     try {
       const stored = await AsyncStorage.getItem(`logged_drinks_${user.uid}`);
       if (stored) setLoggedDrinks(JSON.parse(stored));
-    } catch (e) {
-      console.error('Error loading logged drinks:', e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   const saveLoggedDrinks = async (drinks: LoggedDrink[]) => {
     if (!user) return;
     try {
       await AsyncStorage.setItem(`logged_drinks_${user.uid}`, JSON.stringify(drinks));
-    } catch (e) {
-      console.error('Error saving logged drinks:', e);
+      const todayKey = toDateKey(new Date().toISOString());
+      const todayMg  = drinks.filter((d) => toDateKey(d.logged_at) === todayKey).reduce((s, d) => s + d.caffeine_mg, 0);
+      await AsyncStorage.setItem(`caffeine_today_${user.uid}`, JSON.stringify({ date: todayKey, mg: todayMg }));
+    } catch (e) { console.error(e); }
+  };
+
+  // ─── HANDLERS ──────────────────────────────────────────────────────────────
+
+  const handleAddDrink = async (drink: Drink) => {
+    const loggedDrink: LoggedDrink = { ...drink, logged_at: new Date().toISOString(), user_rating: userRatings[drink.drink_id] };
+    const updated = [loggedDrink, ...loggedDrinks];
+    setLoggedDrinks(updated); saveLoggedDrinks(updated);
+    setAddModalVisible(false); setSelectedDrink(null); setSelectedCategory('All');
+    if (user) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/logs`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: user.uid, drink_id: drink.drink_id, caffeine_amount: drink.caffeine_mg }),
+        });
+        if (res.ok) {
+          const saved = await res.json();
+          const withId = updated.map((d) =>
+            d.logged_at === loggedDrink.logged_at && d.drink_id === drink.drink_id ? { ...d, log_id: saved.log_id } : d
+          );
+          setLoggedDrinks(withId); saveLoggedDrinks(withId);
+        }
+      } catch (e) { console.error('Failed to save log to DB:', e); }
     }
   };
 
-  // ─── HANDLERS ───────────────────────────────────────────────────────────────
-
-  const handleAddDrink = (drink: Drink) => {
-    const loggedDrink: LoggedDrink = {
-      ...drink,
-      logged_at: new Date().toISOString(),
-      user_rating: userRatings[drink.drink_id],
-    };
-    const updated = [loggedDrink, ...loggedDrinks];
-    setLoggedDrinks(updated);
-    saveLoggedDrinks(updated);
-    setAddModalVisible(false);
-    setSelectedDrink(null);
-    setSelectedCategory('All');
-  };
-
-  const handleDeleteDrink = (index: number) => {
-    Alert.alert('Remove Drink', 'Remove this drink from your log?', [
+  const handleDeleteDrink = (drink: LoggedDrink) => {
+    Alert.alert('Remove Drink', `Remove ${drink.name} from your log?`, [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive',
-        onPress: () => {
-          const updated = loggedDrinks.filter((_, i) => i !== index);
-          setLoggedDrinks(updated);
-          saveLoggedDrinks(updated);
-        },
-      },
+      { text: 'Remove', style: 'destructive', onPress: async () => {
+        const updated = loggedDrinks.filter((d) => d.logged_at !== drink.logged_at);
+        setLoggedDrinks(updated); saveLoggedDrinks(updated);
+        if (drink.log_id) {
+          try { await fetch(`${API_BASE_URL}/api/logs/${drink.log_id}`, { method: 'DELETE' }); } catch {}
+        }
+      }},
     ]);
   };
 
   const openRatingModal = (drink: LoggedDrink) => {
-    setDrinkToRate(drink);
-    setPendingRating(drink.user_rating ?? 0);
-    setRatingModalVisible(true);
+    setDrinkToRate(drink); setPendingRating(drink.user_rating ?? 0); setRatingModalVisible(true);
   };
 
   const handleConfirmRating = async () => {
-    if (!drinkToRate || pendingRating === 0) {
-      Alert.alert('Select a rating', 'Please tap a star to give a rating.');
-      return;
-    }
+    if (!drinkToRate || pendingRating === 0) { Alert.alert('Select a rating', 'Please tap a star to give a rating.'); return; }
     await submitRating(drinkToRate.drink_id, pendingRating);
-    setRatingModalVisible(false);
-    setDrinkToRate(null);
+    setRatingModalVisible(false); setDrinkToRate(null);
   };
 
-  // ─── HELPERS ────────────────────────────────────────────────────────────────
+  const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-IE', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
+  // ─── SECTION DATA ──────────────────────────────────────────────────────────
 
-  const totalCaffeine = loggedDrinks.reduce((s, d) => s + d.caffeine_mg, 0);
+  const allSections  = groupByDay(loggedDrinks);
+  const weekSections = getCurrentWeekSections(allSections);
+  const sections     = showWeekOnly ? weekSections : allSections;
+  const totalToday   = allSections.find((s) => s.title === 'Today')?.totalCaffeine ?? 0;
 
-  // ─── RENDER: LOGGED DRINK CARD ───────────────────────────────────────────────
+  // ─── RENDER: DRINK CARD ────────────────────────────────────────────────────
 
-  const renderLoggedDrink = ({ item, index }: { item: LoggedDrink; index: number }) => {
+  const renderDrinkCard = ({ item }: { item: LoggedDrink }) => {
     const avg = averages[item.drink_id];
-
     return (
-      <View style={styles.logCard}>
-        {/* Top row: name + delete */}
-        <View style={styles.logHeader}>
+      <View style={s.drinkCard}>
+        <View style={s.cardTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.drinkName}>{item.name}</Text>
-            <Text style={styles.drinkCategory}>{item.category} · {item.caffeine_mg}mg caffeine</Text>
+            <Text style={s.cardName}>{item.name}</Text>
+            <Text style={s.cardMeta}>{item.category} · {item.caffeine_mg}mg</Text>
           </View>
-          <TouchableOpacity onPress={() => handleDeleteDrink(index)}>
-            <Text style={styles.deleteButton}>✕</Text>
-          </TouchableOpacity>
+          <View style={s.cardRight}>
+            <Text style={s.cardTime}>{formatTime(item.logged_at)}</Text>
+            <TouchableOpacity onPress={() => handleDeleteDrink(item)}>
+              <Text style={s.deleteBtn}>✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <Text style={styles.timestamp}>{formatDate(item.logged_at)}</Text>
-
-        {/* Ratings row */}
-        <View style={styles.ratingsRow}>
-          {/* Average rating */}
-          <View style={styles.avgContainer}>
-            {avg ? (
-              <>
-                <Stars rating={avg.avg_rating} size={14} />
-                <Text style={styles.avgText}>
-                  {Number(avg.avg_rating).toFixed(1)} ({avg.rating_count})
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.noRatingText}>No ratings yet</Text>
-            )}
+        <View style={s.cardBottom}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {avg
+              ? <><Stars rating={avg.avg_rating} size={13} activeColor={C.primary} /><Text style={s.avgText}>{Number(avg.avg_rating).toFixed(1)} ({avg.rating_count})</Text></>
+              : <Text style={s.noRatingText}>No ratings yet</Text>
+            }
           </View>
-
-          {/* User rating button */}
           <TouchableOpacity
-            style={[styles.rateButton, item.user_rating ? styles.rateButtonDone : null]}
+            style={[s.rateBtn, item.user_rating != null && s.rateBtnDone]}
             onPress={() => openRatingModal(item)}
           >
-            <Text style={[styles.rateButtonText, item.user_rating ? styles.rateButtonTextDone : null]}>
-              {item.user_rating ? `Your rating: ${item.user_rating}★` : 'Rate it'}
+            <Text style={[s.rateBtnText, item.user_rating != null && s.rateBtnTextDone]}>
+              {item.user_rating ? `${item.user_rating} stars` : 'Rate it'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -315,204 +294,189 @@ export default function LogScreen() {
     );
   };
 
-  // ─── RENDER: DRINK OPTION IN MODAL ──────────────────────────────────────────
+  // ─── RENDER: SECTION HEADER ────────────────────────────────────────────────
+
+  const renderSectionHeader = ({ section }: { section: DaySection }) => (
+    <View style={s.sectionHeader}>
+      <Text style={s.sectionTitle}>{section.title}</Text>
+      <View style={s.sectionBadge}>
+        <Text style={s.sectionBadgeText}>{section.totalCaffeine}mg caffeine</Text>
+      </View>
+    </View>
+  );
+
+  // ─── RENDER: DRINK PICKER OPTION ──────────────────────────────────────────
 
   const renderDrinkOption = ({ item }: { item: Drink }) => {
     const avg = averages[item.drink_id];
     return (
       <TouchableOpacity
-        style={[styles.drinkOption, selectedDrink?.drink_id === item.drink_id && styles.drinkOptionSelected]}
+        style={[s.drinkOption, selectedDrink?.drink_id === item.drink_id && s.drinkOptionSelected]}
         onPress={() => setSelectedDrink(item)}
       >
-        <Text style={styles.drinkOptionName}>{item.name}</Text>
-        <View style={styles.drinkOptionMeta}>
-          <Text style={styles.drinkOptionCategory}>{item.category}</Text>
-          {avg && (
-            <Text style={styles.drinkOptionAvg}>⭐ {Number(avg.avg_rating).toFixed(1)}</Text>
-          )}
+        <Text style={s.drinkOptionName}>{item.name}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={s.drinkOptionMeta}>{item.category} · {item.caffeine_mg}mg</Text>
+          {avg && <Text style={s.drinkOptionAvg}>{Number(avg.avg_rating).toFixed(1)} stars</Text>}
         </View>
       </TouchableOpacity>
     );
   };
 
-  // ─── RENDER ─────────────────────────────────────────────────────────────────
+  // ─── MAIN RENDER ──────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
+    <View style={s.container}>
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={s.header}>
         <View>
-          <Text style={styles.headerTitle}>Drink Log ☕</Text>
-          {loggedDrinks.length > 0 && (
-            <Text style={styles.headerSub}>
-              {loggedDrinks.length} drinks · {totalCaffeine}mg caffeine
-            </Text>
-          )}
+          <Text style={s.headerTitle}>Drink Log</Text>
+          {totalToday > 0 && <Text style={s.headerSub}>Today: {totalToday}mg caffeine</Text>}
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setAddModalVisible(true)}>
-          <Text style={styles.addButtonText}>+ Add</Text>
+        <TouchableOpacity style={s.addButton} onPress={() => setAddModalVisible(true)} activeOpacity={0.8}>
+          <Text style={s.addButtonText}>+ Add</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Toggle */}
+      <View style={s.toggleRow}>
+        <TouchableOpacity style={[s.toggleBtn, showWeekOnly && s.toggleBtnActive]} onPress={() => setShowWeekOnly(true)}>
+          <Text style={[s.toggleBtnText, showWeekOnly && s.toggleBtnTextActive]}>This Week</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.toggleBtn, !showWeekOnly && s.toggleBtnActive]} onPress={() => setShowWeekOnly(false)}>
+          <Text style={[s.toggleBtnText, !showWeekOnly && s.toggleBtnTextActive]}>All Time</Text>
         </TouchableOpacity>
       </View>
 
       {/* Log list */}
-      {loggedDrinks.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>☕</Text>
-          <Text style={styles.emptyStateText}>No drinks logged yet</Text>
-          <Text style={styles.emptyStateSubtext}>Tap "+ Add" to log your first drink</Text>
+      {sections.length === 0 ? (
+        <View style={s.emptyState}>
+          <Text style={s.emptyTitle}>{showWeekOnly ? 'No drinks logged this week' : 'No drinks logged yet'}</Text>
+          <Text style={s.emptySubtext}>Tap "+ Add" to log your first drink</Text>
         </View>
       ) : (
-        <FlatList
-          data={loggedDrinks}
-          renderItem={renderLoggedDrink}
-          keyExtractor={(item, index) => `${item.drink_id}_${index}`}
-          contentContainerStyle={styles.listContainer}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item, index) => `${item.drink_id}_${item.logged_at}_${index}`}
+          renderItem={renderDrinkCard}
+          renderSectionHeader={renderSectionHeader}
+          contentContainerStyle={s.listContent}
+          stickySectionHeadersEnabled={false}
         />
       )}
 
-      {/* ── ADD DRINK MODAL ───────────────────────────────────────────── */}
+      {/* ── ADD DRINK MODAL ───────────────────────────────────────────────── */}
       <Modal
-        animationType="slide"
-        transparent
-        visible={addModalVisible}
+        animationType="slide" transparent visible={addModalVisible}
         onRequestClose={() => { setAddModalVisible(false); setSelectedDrink(null); }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {selectedDrink ? selectedDrink.name : 'Pick a Drink'}
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle} numberOfLines={1}>
+                {selectedDrink ? selectedDrink.name : 'Select a Drink'}
               </Text>
               <TouchableOpacity onPress={() => { setAddModalVisible(false); setSelectedDrink(null); setSelectedCategory('All'); }}>
-                <Text style={styles.modalClose}>✕</Text>
+                <Text style={s.modalClose}>✕</Text>
               </TouchableOpacity>
             </View>
 
             {selectedDrink ? (
               <ScrollView style={{ padding: 20 }}>
-                {[
-                  ['Category', selectedDrink.category],
-                  ['Type', selectedDrink.type],
-                  ['Base', selectedDrink.base],
-                  ['Caffeine', `${selectedDrink.caffeine_mg}mg`],
-                  ['Dairy-free', selectedDrink.dairy_free ? '✅ Yes' : '❌ No'],
-                  ['Vegan', selectedDrink.vegan ? '✅ Yes' : '❌ No'],
-                  ['Gluten-free', selectedDrink.gluten_free ? '✅ Yes' : '❌ No'],
-                ].map(([label, value]) => (
-                  <View key={label} style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>{label}</Text>
-                    <Text style={styles.detailValue}>{value}</Text>
+                {([
+                  ['Category',    selectedDrink.category],
+                  ['Type',        selectedDrink.type],
+                  ['Base',        selectedDrink.base],
+                  ['Caffeine',    `${selectedDrink.caffeine_mg}mg`],
+                  ['Dairy-free',  selectedDrink.dairy_free  ? 'Yes' : 'No'],
+                  ['Vegan',       selectedDrink.vegan       ? 'Yes' : 'No'],
+                  ['Gluten-free', selectedDrink.gluten_free ? 'Yes' : 'No'],
+                ] as [string,string][]).map(([label, value]) => (
+                  <View key={label} style={s.detailRow}>
+                    <Text style={s.detailLabel}>{label}</Text>
+                    <Text style={s.detailValue}>{value}</Text>
                   </View>
                 ))}
-
-                {/* Average rating in detail view */}
                 {averages[selectedDrink.drink_id] && (
-                  <View style={[styles.detailRow, { alignItems: 'center' }]}>
-                    <Text style={styles.detailLabel}>Avg rating</Text>
+                  <View style={[s.detailRow, { alignItems: 'center' }]}>
+                    <Text style={s.detailLabel}>Average rating</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Stars rating={averages[selectedDrink.drink_id].avg_rating} size={16} />
-                      <Text style={styles.detailValue}>
-                        {Number(averages[selectedDrink.drink_id].avg_rating).toFixed(1)}
-                      </Text>
+                      <Stars rating={averages[selectedDrink.drink_id].avg_rating} size={15} activeColor={C.primary} />
+                      <Text style={s.detailValue}>{Number(averages[selectedDrink.drink_id].avg_rating).toFixed(1)}</Text>
                     </View>
                   </View>
                 )}
-
-                <TouchableOpacity style={styles.backButton} onPress={() => setSelectedDrink(null)}>
-                  <Text style={styles.backButtonText}>← Back</Text>
+                <TouchableOpacity style={s.backBtn} onPress={() => setSelectedDrink(null)}>
+                  <Text style={s.backBtnText}>Back</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmButton} onPress={() => handleAddDrink(selectedDrink)}>
-                  <Text style={styles.confirmButtonText}>Add to Log</Text>
+                <TouchableOpacity style={s.confirmBtn} onPress={() => handleAddDrink(selectedDrink)} activeOpacity={0.8}>
+                  <Text style={s.confirmBtnText}>Add to Log</Text>
                 </TouchableOpacity>
               </ScrollView>
 
             ) : loadingDrinks ? (
-              <View style={styles.centred}>
-                <ActivityIndicator size="large" color="#7c4dff" />
-                <Text style={styles.loadingText}>Loading drinks...</Text>
-              </View>
+              <View style={s.centred}><ActivityIndicator size="large" color={C.primary} /><Text style={s.loadingText}>Loading drinks...</Text></View>
 
             ) : drinksError ? (
-              <View style={styles.centred}>
-                <Text style={styles.errorText}>{drinksError}</Text>
-                <TouchableOpacity style={styles.retryButton} onPress={fetchDrinks}>
-                  <Text style={styles.retryText}>Retry</Text>
-                </TouchableOpacity>
+              <View style={s.centred}>
+                <Text style={s.errorText}>{drinksError}</Text>
+                <TouchableOpacity style={s.retryBtn} onPress={fetchDrinks}><Text style={s.retryText}>Retry</Text></TouchableOpacity>
               </View>
 
             ) : (
-              <>
-                {/* Category filter chips */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                  style={styles.categoryScroll} contentContainerStyle={styles.categoryScrollContent}>
-                  {categories.map((cat) => (
-                    <TouchableOpacity key={cat}
-                      style={[styles.chip, selectedCategory === cat && styles.chipActive]}
-                      onPress={() => setSelectedCategory(cat)}>
-                      <Text style={[styles.chipText, selectedCategory === cat && styles.chipTextActive]}>
-                        {cat}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-
-                <FlatList
-                  data={filteredDrinks}
-                  renderItem={renderDrinkOption}
-                  keyExtractor={(item) => item.drink_id.toString()}
-                  contentContainerStyle={{ paddingBottom: 20 }}
-                />
-              </>
+              <FlatList
+                data={filteredDrinks}
+                renderItem={renderDrinkOption}
+                keyExtractor={(item) => item.drink_id.toString()}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                stickyHeaderIndices={[0]}
+                ListHeaderComponent={
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={s.chipScroll}
+                    contentContainerStyle={s.chipScrollContent}
+                  >
+                    {categories.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[s.chip, selectedCategory === cat && s.chipActive]}
+                        onPress={() => setSelectedCategory(cat)}
+                      >
+                        <Text style={[s.chipText, selectedCategory === cat && s.chipTextActive]}>{cat}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                }
+              />
             )}
           </View>
         </View>
       </Modal>
 
-      {/* ── RATING MODAL ──────────────────────────────────────────────── */}
-      <Modal
-        animationType="fade"
-        transparent
-        visible={ratingModalVisible}
-        onRequestClose={() => setRatingModalVisible(false)}
-      >
-        <View style={styles.ratingOverlay}>
-          <View style={styles.ratingBox}>
-            <Text style={styles.ratingTitle}>Rate your drink</Text>
-            <Text style={styles.ratingDrinkName}>{drinkToRate?.name}</Text>
-
-            <Stars
-              rating={pendingRating}
-              size={40}
-              interactive
-              onRate={(r) => setPendingRating(r)}
-            />
-
+      {/* ── RATING MODAL ──────────────────────────────────────────────────── */}
+      <Modal animationType="fade" transparent visible={ratingModalVisible} onRequestClose={() => setRatingModalVisible(false)}>
+        <View style={s.ratingOverlay}>
+          <View style={s.ratingBox}>
+            <Text style={s.ratingTitle}>Rate your drink</Text>
+            <Text style={s.ratingDrinkName}>{drinkToRate?.name}</Text>
+            <Stars rating={pendingRating} size={40} interactive onRate={setPendingRating} activeColor={C.primary} />
             {pendingRating > 0 && (
-              <Text style={styles.ratingLabel}>
-                {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent!'][pendingRating]}
+              <Text style={s.ratingLabel}>
+                {['','Poor','Fair','Good','Great','Excellent'][pendingRating]}
               </Text>
             )}
-
-            <View style={styles.ratingButtons}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setRatingModalVisible(false)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+            <View style={s.ratingBtns}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setRatingModalVisible(false)}>
+                <Text style={s.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmButton, { flex: 1 }]}
-                onPress={handleConfirmRating}
-                disabled={savingRating}>
-                {savingRating
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.confirmButtonText}>Save Rating</Text>
-                }
+              <TouchableOpacity style={[s.confirmBtn, { flex: 1 }]} onPress={handleConfirmRating} disabled={savingRating} activeOpacity={0.8}>
+                {savingRating ? <ActivityIndicator color="#fff" /> : <Text style={s.confirmBtnText}>Save Rating</Text>}
               </TouchableOpacity>
             </View>
-
-            <Text style={styles.ratingOptional}>Rating is optional — you can skip this</Text>
+            <Text style={s.ratingOptional}>Rating is optional</Text>
           </View>
         </View>
       </Modal>
@@ -521,123 +485,88 @@ export default function LogScreen() {
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
+// ─── STYLES ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-  header: {
-    backgroundColor: '#fff', paddingTop: 60, paddingBottom: 20,
-    paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  headerTitle: { fontSize: 24, fontWeight: '700', color: '#333' },
-  headerSub: { fontSize: 13, color: '#999', marginTop: 2 },
-  addButton: {
-    backgroundColor: '#7c4dff', paddingVertical: 8,
-    paddingHorizontal: 18, borderRadius: 20,
-  },
+const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.background },
+
+  header:        { backgroundColor: C.surface, paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle:   { fontSize: 22, fontWeight: '700', color: C.text },
+  headerSub:     { fontSize: 13, color: C.textMuted, marginTop: 2 },
+  addButton:     { backgroundColor: C.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  listContainer: { padding: 16 },
 
-  // Log card
-  logCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16,
-    marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 3,
-  },
-  logHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
-  drinkName: { fontSize: 17, fontWeight: '700', color: '#333' },
-  drinkCategory: { fontSize: 13, color: '#999', marginTop: 2 },
-  deleteButton: { fontSize: 18, color: '#ccc', paddingHorizontal: 4 },
-  timestamp: { fontSize: 12, color: '#bbb', marginBottom: 10 },
+  toggleRow:           { flexDirection: 'row', margin: 16, backgroundColor: C.border, borderRadius: 10, padding: 3 },
+  toggleBtn:           { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  toggleBtnActive:     { backgroundColor: C.surface, shadowColor: C.cardShadow, shadowOpacity: 1, shadowRadius: 4, elevation: 2 },
+  toggleBtnText:       { fontSize: 13, color: C.textMuted, fontWeight: '500' },
+  toggleBtnTextActive: { color: C.text, fontWeight: '700' },
 
-  // Ratings row on card
-  ratingsRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10,
-  },
-  avgContainer: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avgText: { fontSize: 12, color: '#888', marginLeft: 4 },
-  noRatingText: { fontSize: 12, color: '#ccc' },
-  rateButton: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 14, borderWidth: 1, borderColor: '#7c4dff',
-  },
-  rateButtonDone: { backgroundColor: '#7c4dff', borderColor: '#7c4dff' },
-  rateButtonText: { fontSize: 12, color: '#7c4dff', fontWeight: '600' },
-  rateButtonTextDone: { color: '#fff' },
+  sectionHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6 },
+  sectionTitle:     { fontSize: 14, fontWeight: '700', color: C.textSecondary },
+  sectionBadge:     { backgroundColor: C.primaryMuted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+  sectionBadgeText: { fontSize: 12, color: C.primary, fontWeight: '600' },
 
-  // Empty state
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyStateText: { fontSize: 18, fontWeight: '600', color: '#666', marginBottom: 8 },
-  emptyStateSubtext: { fontSize: 14, color: '#999', textAlign: 'center' },
+  drinkCard:   { backgroundColor: C.surface, borderRadius: 12, marginHorizontal: 16, marginBottom: 10, padding: 14, borderWidth: 1, borderColor: C.border, shadowColor: C.cardShadow, shadowOpacity: 1, shadowRadius: 4, elevation: 2 },
+  cardTop:     { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+  cardName:    { fontSize: 15, fontWeight: '700', color: C.text },
+  cardMeta:    { fontSize: 12, color: C.textMuted, marginTop: 2 },
+  cardRight:   { alignItems: 'flex-end', gap: 4 },
+  cardTime:    { fontSize: 12, color: C.textMuted },
+  deleteBtn:   { fontSize: 14, color: C.textMuted, paddingHorizontal: 2 },
+  cardBottom:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: C.borderSubtle, paddingTop: 10 },
+  avgText:     { fontSize: 12, color: C.textMuted },
+  noRatingText:{ fontSize: 12, color: C.border },
+  rateBtn:         { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: C.primary },
+  rateBtnDone:     { backgroundColor: C.primary },
+  rateBtnText:     { fontSize: 12, color: C.primary, fontWeight: '600' },
+  rateBtnTextDone: { color: '#fff' },
 
-  // Modal shared
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: {
-    backgroundColor: '#fff', borderTopLeftRadius: 20,
-    borderTopRightRadius: 20, maxHeight: '85%', paddingBottom: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: '#333', flex: 1, marginRight: 12 },
-  modalClose: { fontSize: 22, color: '#999' },
+  listContent: { paddingBottom: 30 },
+  emptyState:  { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  emptyTitle:  { fontSize: 16, fontWeight: '600', color: C.textSecondary, marginBottom: 6 },
+  emptySubtext:{ fontSize: 14, color: C.textMuted, textAlign: 'center' },
 
-  // Category chips
-  categoryScroll: { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  categoryScrollContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#f0f0f0', marginRight: 6 },
-  chipActive: { backgroundColor: '#7c4dff' },
-  chipText: { fontSize: 13, color: '#666', fontWeight: '500' },
-  chipTextActive: { color: '#fff' },
+  modalOverlay: { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', paddingBottom: 20, borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
+  modalHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: C.border },
+  modalTitle:   { fontSize: 17, fontWeight: '700', color: C.text, flex: 1, marginRight: 12 },
+  modalClose:   { fontSize: 20, color: C.textMuted },
 
-  // Drink list option
-  drinkOption: { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
-  drinkOptionSelected: { backgroundColor: '#f3f0ff' },
-  drinkOptionName: { fontSize: 15, fontWeight: '600', color: '#333', marginBottom: 3 },
-  drinkOptionMeta: { flexDirection: 'row', justifyContent: 'space-between' },
-  drinkOptionCategory: { fontSize: 13, color: '#999' },
-  drinkOptionAvg: { fontSize: 13, color: '#f5a623', fontWeight: '500' },
+  chipScroll:        { maxHeight: 52, borderBottomWidth: 1, borderBottomColor: C.border },
+  chipScrollContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  chip:              { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: C.background, borderWidth: 1, borderColor: C.border },
+  chipActive:        { backgroundColor: C.primary, borderColor: C.primary },
+  chipText:          { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
+  chipTextActive:    { color: '#fff' },
 
-  // Detail view
-  detailRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f5f5',
-  },
-  detailLabel: { fontSize: 15, color: '#888' },
-  detailValue: { fontSize: 15, color: '#333', fontWeight: '600' },
-  backButton: { marginTop: 8, paddingVertical: 8 },
-  backButtonText: { color: '#7c4dff', fontSize: 14, fontWeight: '500' },
-  confirmButton: {
-    backgroundColor: '#7c4dff', paddingVertical: 14,
-    borderRadius: 12, alignItems: 'center', marginBottom: 8,
-  },
-  confirmButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  drinkOption:         { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
+  drinkOptionSelected: { backgroundColor: C.primaryMuted },
+  drinkOptionName:     { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 3 },
+  drinkOptionMeta:     { fontSize: 13, color: C.textMuted },
+  drinkOptionAvg:      { fontSize: 13, color: C.primary, fontWeight: '500' },
 
-  // Loading / error
-  centred: { padding: 40, alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#999', fontSize: 14 },
-  errorText: { color: '#e53935', fontSize: 14, textAlign: 'center', marginBottom: 16 },
-  retryButton: { backgroundColor: '#7c4dff', paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
-  retryText: { color: '#fff', fontWeight: '600' },
+  detailRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
+  detailLabel: { fontSize: 14, color: C.textMuted },
+  detailValue: { fontSize: 14, color: C.text, fontWeight: '600' },
+  backBtn:     { marginTop: 8, paddingVertical: 8 },
+  backBtnText: { color: C.primary, fontSize: 14, fontWeight: '500' },
+  confirmBtn:  { backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
-  // Rating modal
-  ratingOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  ratingBox: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 28,
-    width: '100%', alignItems: 'center', gap: 12,
-  },
-  ratingTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
-  ratingDrinkName: { fontSize: 15, color: '#666', marginBottom: 8 },
-  ratingLabel: { fontSize: 15, fontWeight: '600', color: '#7c4dff' },
-  ratingButtons: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
-  cancelButton: {
-    flex: 1, paddingVertical: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: '#ddd', alignItems: 'center',
-  },
-  cancelButtonText: { color: '#666', fontWeight: '600' },
-  ratingOptional: { fontSize: 12, color: '#bbb', marginTop: 4 },
+  centred:     { padding: 40, alignItems: 'center' },
+  loadingText: { marginTop: 12, color: C.textMuted, fontSize: 14 },
+  errorText:   { color: '#8b3a3a', fontSize: 14, textAlign: 'center', marginBottom: 16 },
+  retryBtn:    { backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+  retryText:   { color: '#fff', fontWeight: '600' },
+
+  ratingOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  ratingBox:       { backgroundColor: C.surface, borderRadius: 20, padding: 28, width: '100%', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.border },
+  ratingTitle:     { fontSize: 18, fontWeight: '700', color: C.text },
+  ratingDrinkName: { fontSize: 14, color: C.textMuted, marginBottom: 8 },
+  ratingLabel:     { fontSize: 15, fontWeight: '600', color: C.primary },
+  ratingBtns:      { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
+  cancelBtn:       { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
+  cancelBtnText:   { color: C.textSecondary, fontWeight: '600' },
+  ratingOptional:  { fontSize: 12, color: C.textMuted, marginTop: 4 },
 });
