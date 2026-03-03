@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Animated, ScrollView, Modal, FlatList,
+  ActivityIndicator, Animated, ScrollView, Modal, FlatList, Image,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
 import { db } from '@/firebaseConfig';
@@ -290,9 +290,11 @@ export default function Index() {
           </Text>
           <Text style={s.subtitle}>What are you having today?</Text>
         </View>
-        <View style={s.logoMark}>
-          <Text style={s.logoLetter}>A</Text>
-        </View>
+        <Image
+          source={require('@/assets/images/app_logo.png')}
+          style={s.logoMark}
+          resizeMode="contain"
+        />
       </View>
 
       {/* ── CAFFEINE TRACKER ───────────────────────────────────────── */}

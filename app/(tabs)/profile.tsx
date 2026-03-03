@@ -1,7 +1,7 @@
 // app/(tabs)/profile.tsx  (was settings.tsx)
 import {
-  View, Text, Button, Alert, StyleSheet, ScrollView,
-  TextInput, TouchableOpacity, ActivityIndicator,
+  View, Text, Alert, StyleSheet, ScrollView, Modal,
+  TextInput, TouchableOpacity, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
 import { signOut } from 'firebase/auth';
@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/constants/theme';
-import { getMascotById } from '@/constants/mascots';
+import { MASCOTS, getMascotById } from '@/constants/mascots';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const CAFFEINE_REFERENCE = [
@@ -49,6 +49,8 @@ export default function ProfileScreen() {
   const [caffeineLimitInput,   setCaffeineLimitInput]   = useState('');
   const [showCaffeineGuide,    setShowCaffeineGuide]    = useState(false);
   const [mascotId,             setMascotId]             = useState<string | null>(null);
+  const [showMascotPicker,     setShowMascotPicker]     = useState(false);
+  const [pendingMascotId,      setPendingMascotId]      = useState<string | null>(null);
 
   const genderOptions  = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
   const dietaryOptions = ['None', 'Dairy-free', 'Vegan', 'Gluten-free', 'Nut allergy'];
@@ -124,6 +126,15 @@ export default function ProfileScreen() {
     finally { setSaving(false); }
   };
 
+  const handleSaveMascot = async () => {
+    if (!pendingMascotId || !user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { mascotId: pendingMascotId });
+      setMascotId(pendingMascotId);
+      setShowMascotPicker(false);
+    } catch (e: any) { Alert.alert('Error', e.message); }
+  };
+
   const handleLogout = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -142,7 +153,88 @@ export default function ProfileScreen() {
     <ScrollView style={s.root} contentContainerStyle={s.scroll}>
 
       {/* Mascot header */}
-      <MascotHeader mascotId={mascotId} displayName={displayName} />
+      <MascotHeader
+        mascotId={mascotId}
+        displayName={displayName}
+        onChangeMascot={() => { setPendingMascotId(mascotId); setShowMascotPicker(true); }}
+      />
+
+      {/* Mascot picker modal */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={showMascotPicker}
+        onRequestClose={() => setShowMascotPicker(false)}
+      >
+        <View style={s.pickerOverlay}>
+          <View style={s.pickerSheet}>
+            <View style={s.pickerHeader}>
+              <Text style={s.pickerTitle}>Choose your mascot</Text>
+              <TouchableOpacity onPress={() => setShowMascotPicker(false)}>
+                <Text style={s.pickerClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={s.pickerScroll} showsVerticalScrollIndicator={false}>
+              <View style={s.pickerGrid}>
+                {MASCOTS.map((mascot) => {
+                  const isSelected = pendingMascotId === mascot.id;
+                  return (
+                    <TouchableOpacity
+                      key={mascot.id}
+                      style={[s.pickerCell, isSelected && s.pickerCellSelected]}
+                      onPress={() => setPendingMascotId(mascot.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[s.pickerAvatar, isSelected && s.pickerAvatarSelected]}>
+                        <Text style={s.pickerEmoji}>{mascot.placeholder}</Text>
+                      </View>
+                      <Text style={[s.pickerName, isSelected && s.pickerNameSelected]}>
+                        {mascot.name}
+                      </Text>
+                      {isSelected && (
+                        <View style={s.pickerTick}>
+                          <Text style={s.pickerTickText}>✓</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Preview of selected */}
+              {pendingMascotId && (() => {
+                const m = getMascotById(pendingMascotId);
+                return m ? (
+                  <View style={s.pickerPreview}>
+                    <View style={s.pickerPreviewAvatar}>
+                      <Text style={s.pickerPreviewEmoji}>{m.placeholder}</Text>
+                    </View>
+                    <View>
+                      <Text style={s.pickerPreviewName}>{m.name}</Text>
+                      <Text style={s.pickerPreviewSub}>Your new mascot</Text>
+                    </View>
+                  </View>
+                ) : null;
+              })()}
+            </ScrollView>
+
+            <View style={s.pickerActions}>
+              <TouchableOpacity style={s.pickerCancelBtn} onPress={() => setShowMascotPicker(false)}>
+                <Text style={s.pickerCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.pickerSaveBtn, !pendingMascotId && s.pickerSaveBtnDisabled]}
+                onPress={handleSaveMascot}
+                disabled={!pendingMascotId}
+                activeOpacity={0.8}
+              >
+                <Text style={s.pickerSaveText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Account */}
       <View style={s.section}>
@@ -290,31 +382,39 @@ export default function ProfileScreen() {
 
 // ─── MASCOT HEADER COMPONENT ─────────────────────────────────────────────────
 
-function MascotHeader({ mascotId, displayName }: {
+function MascotHeader({ mascotId, displayName, onChangeMascot }: {
   mascotId: string | null;
   displayName: string;
+  onChangeMascot: () => void;
 }) {
   const colorScheme = useColorScheme();
   const C = Colors[colorScheme ?? 'light'];
   const mascot = mascotId ? getMascotById(mascotId) : null;
+  const ms = mhStyles(C);
 
   return (
-    <View style={mhStyles(C).mascotHeader}>
-      <View style={mhStyles(C).mascotAvatarWrap}>
-        <View style={[mhStyles(C).mascotAvatarCircle, !mascot && mhStyles(C).mascotAvatarCircleFallback]}>
+    <View style={ms.mascotHeader}>
+      {/* Avatar column — circle + button stacked */}
+      <View style={ms.mascotAvatarCol}>
+        <View style={[ms.mascotAvatarCircle, !mascot && ms.mascotAvatarCircleFallback]}>
           {mascot
-            ? <Text style={mhStyles(C).mascotEmoji}>{mascot.placeholder}</Text>
-            : <Text style={mhStyles(C).mascotFallbackLetter}>
+            ? <Text style={ms.mascotEmoji}>{mascot.placeholder}</Text>
+            : <Text style={ms.mascotFallbackLetter}>
                 {displayName ? displayName[0].toUpperCase() : 'A'}
               </Text>
           }
         </View>
+        <TouchableOpacity style={ms.changeMascotBtn} onPress={onChangeMascot} activeOpacity={0.8}>
+          <Text style={ms.changeMascotBtnText}>Change</Text>
+        </TouchableOpacity>
       </View>
-      <View style={mhStyles(C).mascotHeaderText}>
-        <Text style={mhStyles(C).mascotHeaderName}>{displayName || 'Your profile'}</Text>
+
+      {/* Name + mascot name */}
+      <View style={ms.mascotHeaderText}>
+        <Text style={ms.mascotHeaderName}>{displayName || 'Your profile'}</Text>
         {mascot
-          ? <Text style={mhStyles(C).mascotHeaderSub}>{mascot.name}</Text>
-          : <Text style={mhStyles(C).mascotHeaderSubMuted}>No mascot selected</Text>
+          ? <Text style={ms.mascotHeaderSub}>{mascot.name}</Text>
+          : <Text style={ms.mascotHeaderSubMuted}>No mascot selected</Text>
         }
       </View>
     </View>
@@ -323,11 +423,13 @@ function MascotHeader({ mascotId, displayName }: {
 
 const mhStyles = (C: typeof Colors.light) => StyleSheet.create({
   mascotHeader:               { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
-  mascotAvatarWrap:           {},
+  mascotAvatarCol:            { alignItems: 'center', gap: 8 },
   mascotAvatarCircle:         { width: 72, height: 72, borderRadius: 36, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
   mascotAvatarCircleFallback: { backgroundColor: C.border },
   mascotEmoji:                { fontSize: 34 },
   mascotFallbackLetter:       { fontSize: 30, fontWeight: '700', color: '#fff' },
+  changeMascotBtn:            { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  changeMascotBtnText:        { fontSize: 11, color: C.primary, fontWeight: '600' },
   mascotHeaderText:           { flex: 1 },
   mascotHeaderName:           { fontSize: 20, fontWeight: '700', color: C.text, marginBottom: 3 },
   mascotHeaderSub:            { fontSize: 14, color: C.primary, fontWeight: '600' },
@@ -385,5 +487,40 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
 
   logoutBtn:     { backgroundColor: C.surface, borderWidth: 1, borderColor: '#8b3a3a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   logoutBtnText: { color: '#8b3a3a', fontSize: 15, fontWeight: '600' },
+
+
+
+  // Mascot picker modal
+  pickerOverlay:  { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
+  pickerSheet:    { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
+  pickerHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: C.border },
+  pickerTitle:    { fontSize: 17, fontWeight: '700', color: C.text },
+  pickerClose:    { fontSize: 20, color: C.textMuted, padding: 4 },
+  pickerScroll:   { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
+
+  pickerGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  pickerCell:     { width: (Dimensions.get('window').width - 80) / 5, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background, position: 'relative' },
+  pickerCellSelected: { borderColor: C.primary, backgroundColor: C.primaryMuted },
+
+  pickerAvatar:         { width: (Dimensions.get('window').width - 80) / 5 - 16, height: (Dimensions.get('window').width - 80) / 5 - 16, borderRadius: ((Dimensions.get('window').width - 80) / 5 - 16) / 2, backgroundColor: C.border, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  pickerAvatarSelected: { backgroundColor: C.primary },
+  pickerEmoji:          { fontSize: 20 },
+  pickerName:           { fontSize: 10, fontWeight: '600', color: C.textMuted, textAlign: 'center' },
+  pickerNameSelected:   { color: C.primary },
+  pickerTick:           { position: 'absolute', top: 5, right: 5, width: 15, height: 15, borderRadius: 8, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
+  pickerTickText:       { fontSize: 8, color: '#fff', fontWeight: '700' },
+
+  pickerPreview:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.primaryMuted, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, marginBottom: 8 },
+  pickerPreviewAvatar:{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
+  pickerPreviewEmoji: { fontSize: 24 },
+  pickerPreviewName:  { fontSize: 15, fontWeight: '700', color: C.primary },
+  pickerPreviewSub:   { fontSize: 12, color: C.textSecondary, marginTop: 1 },
+
+  pickerActions:      { flexDirection: 'row', gap: 10, padding: 20, borderTopWidth: 1, borderTopColor: C.border },
+  pickerCancelBtn:    { flex: 1, backgroundColor: C.background, borderWidth: 1, borderColor: C.border, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
+  pickerCancelText:   { color: C.textSecondary, fontWeight: '600', fontSize: 15 },
+  pickerSaveBtn:      { flex: 2, backgroundColor: C.primary, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
+  pickerSaveBtnDisabled: { opacity: 0.4 },
+  pickerSaveText:     { color: '#fff', fontWeight: '700', fontSize: 15 },
 
 });

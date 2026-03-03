@@ -90,9 +90,11 @@ export default function SignIn() {
 
         {/* Brand mark */}
         <View style={s.brandBlock}>
-          <View style={s.logoMark}>
-            <Text style={s.logoLetter}>A</Text>
-          </View>
+          <Image
+            source={require('@/assets/images/app_logo.png')}
+            style={s.logoMark}
+            resizeMode="contain"
+          />
           <Text style={s.brandName}>Aroma</Text>
           <Text style={s.brandTagline}>Your coffee, personalised</Text>
         </View>

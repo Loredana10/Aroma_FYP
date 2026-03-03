@@ -3,7 +3,7 @@ import { useState, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Alert,
   StyleSheet, ScrollView, ActivityIndicator, Animated,
-  Dimensions,
+  Dimensions, Image,
 } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
@@ -193,9 +193,11 @@ export default function CompleteProfile() {
 
       {/* Header */}
       <View style={s.header}>
-        <View style={s.logoMark}>
-          <Text style={s.logoLetter}>A</Text>
-        </View>
+        <Image
+          source={require('@/assets/images/app_logo.png')}
+          style={s.logoMark}
+          resizeMode="contain"
+        />
         <Text style={s.greeting}>Hello, {displayName}</Text>
         <Text style={s.subtitle}>Let's set up your profile</Text>
       </View>
