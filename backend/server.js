@@ -3,6 +3,8 @@ const cors = require('cors');
 const drinksRouter = require('./routes/drinks');
 const usersRouter = require('./routes/users');
 const ratingsRouter = require('./routes/ratings');
+const logsRouter = require('./routes/logs');
+const recommendationsRouter = require('./routes/recommendations');
 
 const app = express();
 const PORT = 3000;
@@ -15,6 +17,8 @@ app.use(express.json());
 app.use('/api/drinks', drinksRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/ratings', ratingsRouter);
+app.use('/api/logs', logsRouter);
+app.use('/api/recommendations', recommendationsRouter);
 
 // Health check
 app.get('/', (req, res) => {

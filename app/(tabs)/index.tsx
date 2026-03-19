@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Animated, ScrollView, Modal, FlatList, Image,
+  ActivityIndicator, Animated, ScrollView, Modal, FlatList, Image, Alert,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
 import { db } from '@/firebaseConfig';
@@ -32,6 +32,23 @@ interface LoggedDrink extends Drink {
   logged_at: string;
   user_rating?: number;
   log_id?: number;
+}
+
+interface PendingRecommendation {
+  drink_id:       number;
+  name:           string;
+  category:       string;
+  type:           string;
+  caffeine_mg:    number;
+  dairy_free:     boolean;
+  vegan:          boolean;
+  gluten_free:    boolean;
+  saved_at:       string;
+  // Questionnaire context — saved so logs/ratings get mood/time/weather
+  mood?:          string | null;
+  time_of_day?:   string | null;
+  weather?:       string | null;
+  is_recommended?: boolean;
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -72,6 +89,10 @@ export default function Index() {
   // Recent drinks
   const [recentDrinks, setRecentDrinks] = useState<LoggedDrink[]>([]);
 
+  // Pending recommendation
+  const [pendingRec,   setPendingRec]   = useState<PendingRecommendation | null>(null);
+  const [loggingDrink, setLoggingDrink] = useState(false);
+
   // Quick-add modal
   const [quickAddVisible,  setQuickAddVisible]  = useState(false);
   const [allDrinks,        setAllDrinks]        = useState<Drink[]>([]);
@@ -90,6 +111,7 @@ export default function Index() {
       loadProfile();
       loadCaffeineToday();
       loadRecentDrinks();
+      loadPendingRec();
     }, [user])
   );
 
@@ -131,7 +153,6 @@ export default function Index() {
       const { date, mg } = JSON.parse(raw);
       const todayMg = toDateKey(new Date().toISOString()) === date ? mg : 0;
       setCaffeineMg(todayMg);
-      // read limit from cache so we can animate immediately
       const limitRaw = await AsyncStorage.getItem(`caffeine_limit_${user!.uid}`);
       if (limitRaw) animateBar(todayMg, Number(limitRaw));
     } catch {}
@@ -142,7 +163,6 @@ export default function Index() {
       const stored = await AsyncStorage.getItem(`logged_drinks_${user!.uid}`);
       if (!stored) return;
       const all: LoggedDrink[] = JSON.parse(stored);
-      // 3 most recent, de-duplicated by drink name so variety is shown
       const seen = new Set<number>();
       const recent: LoggedDrink[] = [];
       for (const d of all) {
@@ -154,6 +174,96 @@ export default function Index() {
       }
       setRecentDrinks(recent);
     } catch {}
+  };
+
+  const loadPendingRec = async () => {
+    try {
+      const raw = await AsyncStorage.getItem(`pending_recommendation_${user!.uid}`);
+      setPendingRec(raw ? JSON.parse(raw) : null);
+    } catch {}
+  };
+
+  // ─── PENDING REC ACTIONS ─────────────────────────────────────────────────
+
+  const handleLogPending = async () => {
+    if (!user || !pendingRec) return;
+    setLoggingDrink(true);
+    try {
+      const logEntry = {
+        ...pendingRec,
+        logged_at:      new Date().toISOString(),
+        is_recommended: true,
+      };
+      const storageKey = `logged_drinks_${user.uid}`;
+      const raw        = await AsyncStorage.getItem(storageKey);
+      const existing   = raw ? JSON.parse(raw) : [];
+      const updated    = [logEntry, ...existing];
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
+
+      const todayKey = logEntry.logged_at.slice(0, 10);
+      const todayMg  = updated
+        .filter((d: any) => d.logged_at.slice(0, 10) === todayKey)
+        .reduce((sum: number, d: any) => sum + d.caffeine_mg, 0);
+      await AsyncStorage.setItem(
+        `caffeine_today_${user.uid}`,
+        JSON.stringify({ date: todayKey, mg: todayMg })
+      );
+      setCaffeineMg(todayMg);
+      if (caffeineLimit) animateBar(todayMg, caffeineLimit);
+
+      try {
+        // Save log with the questionnaire context that was stored on the pending rec
+        const savedRes = await fetch(`${API_BASE_URL}/api/logs`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id:         user.uid,
+            drink_id:        pendingRec.drink_id,
+            caffeine_amount: pendingRec.caffeine_mg,
+            mood:            pendingRec.mood        ?? null,
+            time_of_day:     pendingRec.time_of_day ?? null,
+            weather:         pendingRec.weather     ?? null,
+            is_recommended:  true,
+          }),
+        });
+        // Store the returned log_id on the AsyncStorage entry so ratings can link to it
+        if (savedRes.ok) {
+          const savedLog = await savedRes.json();
+          const withId = updated.map((d: any) =>
+            d.logged_at === logEntry.logged_at && d.drink_id === pendingRec.drink_id
+              ? { ...d, log_id: savedLog.log_id }
+              : d
+          );
+          await AsyncStorage.setItem(storageKey, JSON.stringify(withId));
+        }
+      } catch {}
+
+      await AsyncStorage.removeItem(`pending_recommendation_${user.uid}`);
+      setPendingRec(null);
+      loadRecentDrinks();
+      Alert.alert('Logged!', `${pendingRec.name} has been added to your log.`);
+    } catch {
+      Alert.alert('Error', 'Could not log this drink. Please try again.');
+    } finally {
+      setLoggingDrink(false);
+    }
+  };
+
+  const handleDismissPending = () => {
+    Alert.alert(
+      'Dismiss recommendation?',
+      'This will remove it from your home screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Dismiss', style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem(`pending_recommendation_${user!.uid}`);
+            setPendingRec(null);
+          },
+        },
+      ]
+    );
   };
 
   // ─── QUICK ADD ───────────────────────────────────────────────────────────
@@ -229,7 +339,6 @@ export default function Index() {
       loadRecentDrinks();
     } catch (e) { console.error(e); }
 
-    // Persist to PostgreSQL — non-fatal
     if (user) {
       try {
         await fetch(`${API_BASE_URL}/api/logs`, {
@@ -337,21 +446,54 @@ export default function Index() {
         <Text style={s.chevron}>›</Text>
       </TouchableOpacity>
 
-      {/* ── RECOMMENDATION CTA ─────────────────────────────────────── */}
-      <TouchableOpacity
-        style={s.recCard}
-        onPress={() => router.push('/personalised')}
-        activeOpacity={0.85}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={s.recLabel}>Personalised for you</Text>
-          <Text style={s.recTitle}>Get a recommendation</Text>
-          <Text style={s.recSub}>
-            Answer a few questions and we'll suggest the perfect drink
+      {/* ── PENDING RECOMMENDATION CARD (shown when user has a saved rec) ── */}
+      {pendingRec ? (
+        <View style={s.pendingCard}>
+          <View style={s.pendingCardTop}>
+            <Text style={s.pendingCardLabel}>YOUR RECOMMENDATION</Text>
+            <TouchableOpacity
+              onPress={handleDismissPending}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={s.pendingCardDismiss}>x</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={s.pendingName}>{pendingRec.name}</Text>
+          <Text style={s.pendingMeta}>
+            {pendingRec.category}  ·  {pendingRec.type}  ·  {pendingRec.caffeine_mg}mg caffeine
           </Text>
+          <Text style={s.pendingPrompt}>
+            Come back after drinking this and log it below.
+          </Text>
+          <TouchableOpacity
+            style={s.pendingLogBtn}
+            onPress={handleLogPending}
+            disabled={loggingDrink}
+            activeOpacity={0.8}
+          >
+            {loggingDrink
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={s.pendingLogBtnText}>Log + rate this drink</Text>
+            }
+          </TouchableOpacity>
         </View>
-        <Text style={s.recChevron}>›</Text>
-      </TouchableOpacity>
+      ) : (
+        /* ── RECOMMENDATION CTA (shown when no pending rec) ─────────── */
+        <TouchableOpacity
+          style={s.recCard}
+          onPress={() => router.push('/personalised')}
+          activeOpacity={0.85}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={s.recLabel}>Personalised for you</Text>
+            <Text style={s.recTitle}>Get a recommendation</Text>
+            <Text style={s.recSub}>
+              Answer a few questions and we'll suggest the perfect drink
+            </Text>
+          </View>
+          <Text style={s.recChevron}>›</Text>
+        </TouchableOpacity>
+      )}
 
       {/* ── RECENT DRINKS ──────────────────────────────────────────── */}
       <View style={s.sectionHeader}>
@@ -497,7 +639,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   scroll: { paddingHorizontal: 24, paddingTop: 72 },
 
   // Header
-  header:     {
+  header: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-start', marginBottom: 24,
   },
@@ -517,7 +659,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
     shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1, shadowRadius: 6, elevation: 2,
   },
-  cardHeader:   {
+  cardHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 12,
   },
@@ -554,7 +696,34 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   quickAddSub:   { fontSize: 12, color: C.textMuted, marginTop: 1 },
   chevron:       { fontSize: 22, color: C.textMuted },
 
-  // Recommendation card
+  // Pending recommendation card (replaces recCard slot when a rec is saved)
+  pendingCard: {
+    backgroundColor: C.surface, borderRadius: 16, padding: 18,
+    marginBottom: 28, borderWidth: 1.5, borderColor: C.primary,
+    shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1, shadowRadius: 6, elevation: 2,
+  },
+  pendingCardTop: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 10,
+  },
+  pendingCardLabel: {
+    fontSize: 10, fontWeight: '700', color: C.primary,
+    letterSpacing: 0.8,
+  },
+  pendingCardDismiss: { fontSize: 14, color: C.textMuted },
+  pendingName:  { fontSize: 17, fontWeight: '700', color: C.text, marginBottom: 3 },
+  pendingMeta:  { fontSize: 13, color: C.textMuted, marginBottom: 10 },
+  pendingPrompt: {
+    fontSize: 13, color: C.textSecondary, lineHeight: 19, marginBottom: 14,
+  },
+  pendingLogBtn: {
+    backgroundColor: C.primary, paddingVertical: 13,
+    borderRadius: 10, alignItems: 'center',
+  },
+  pendingLogBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // Recommendation CTA card (shown when no pending rec)
   recCard: {
     backgroundColor: C.primary, borderRadius: 16, padding: 20,
     marginBottom: 28, flexDirection: 'row', alignItems: 'center',
@@ -619,9 +788,9 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
     alignItems: 'center', padding: 20,
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  modalTitle:  { fontSize: 17, fontWeight: '700', color: C.text },
-  modalClose:  { fontSize: 20, color: C.textMuted },
-  modalCentred:{ padding: 40, alignItems: 'center' },
+  modalTitle:     { fontSize: 17, fontWeight: '700', color: C.text },
+  modalClose:     { fontSize: 20, color: C.textMuted },
+  modalCentred:   { padding: 40, alignItems: 'center' },
   modalLoadText:  { marginTop: 12, color: C.textMuted, fontSize: 14 },
   modalErrorText: { color: '#8b3a3a', fontSize: 14, textAlign: 'center', marginBottom: 16 },
   retryBtn:    {

@@ -1,6 +1,6 @@
 // app/(tabs)/profile.tsx  (was settings.tsx)
 import {
-  View, Text, Alert, StyleSheet, ScrollView, Modal,
+  View, Text, Alert, StyleSheet, ScrollView, Modal, Image,
   TextInput, TouchableOpacity, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
@@ -29,6 +29,53 @@ const CAFFEINE_REFERENCE = [
   { name: 'Herbal Tea',         mg: 0   },
 ];
 
+// Recommended daily caffeine intake by age group
+// Sources: NHS, MedStar Health, Caffeine Informer
+const CAFFEINE_BY_AGE = [
+  {
+    range: 'Ages 13–17',
+    limit: '≤ 100 mg / day',
+    color: '#e57373',
+    notes: 'Adolescents are more sensitive to caffeine. Up to 100 mg is the cautious upper limit — roughly one small espresso or two cans of cola.',
+    examples: ['1 espresso shot (100 mg)', '2 cups of tea (~100 mg)'],
+  },
+  {
+    range: 'Ages 18–24',
+    limit: '≤ 200 mg / day',
+    color: '#ffb74d',
+    notes: 'Young adults can tolerate more, but sleep quality remains sensitive. Up to 200 mg is generally safe. Avoid caffeine within 6 hours of bedtime.',
+    examples: ['1 large latte (200 mg)', '2 shots of espresso (200 mg)'],
+  },
+  {
+    range: 'Ages 25–49',
+    limit: '200–400 mg / day',
+    color: '#81c784',
+    notes: 'Healthy adults can safely consume up to 400 mg per day — the widely cited upper safe limit per NHS and EFSA guidelines.',
+    examples: ['4 espresso shots (400 mg)', '2 large lattes (400 mg)'],
+  },
+  {
+    range: 'Ages 50–64',
+    limit: '≤ 300 mg / day',
+    color: '#64b5f6',
+    notes: 'Caffeine metabolism slows with age. 300 mg is a sensible ceiling as caffeine can worsen hypertension and acid reflux.',
+    examples: ['3 espresso shots (300 mg)', '1–2 medium lattes (200–300 mg)'],
+  },
+  {
+    range: 'Ages 65+',
+    limit: '≤ 200 mg / day',
+    color: '#ba68c8',
+    notes: 'Older adults should aim for no more than 200 mg/day. Caffeine can disrupt sleep and interact with medications more common in later life.',
+    examples: ['1–2 espresso shots (100–200 mg)', 'Decaf coffee (2–10 mg)'],
+  },
+  {
+    range: 'Pregnant / Breastfeeding',
+    limit: '≤ 200 mg / day',
+    color: '#f06292',
+    notes: 'NHS and WHO recommend staying below 200 mg during pregnancy and breastfeeding. High intake is linked to low birth weight.',
+    examples: ['1 espresso shot (100 mg)', '2 cups of tea (~100 mg)'],
+  },
+];
+
 export default function ProfileScreen() {
   const { user } = useAuth();
   const router   = useRouter();
@@ -48,6 +95,8 @@ export default function ProfileScreen() {
   const [editingCaffeine,      setEditingCaffeine]      = useState(false);
   const [caffeineLimitInput,   setCaffeineLimitInput]   = useState('');
   const [showCaffeineGuide,    setShowCaffeineGuide]    = useState(false);
+  const [showAgeGuide,         setShowAgeGuide]         = useState(false);
+  const [expandedAgeRange,     setExpandedAgeRange]     = useState<string | null>(null);
   const [mascotId,             setMascotId]             = useState<string | null>(null);
   const [showMascotPicker,     setShowMascotPicker]     = useState(false);
   const [pendingMascotId,      setPendingMascotId]      = useState<string | null>(null);
@@ -187,7 +236,10 @@ export default function ProfileScreen() {
                       activeOpacity={0.8}
                     >
                       <View style={[s.pickerAvatar, isSelected && s.pickerAvatarSelected]}>
-                        <Text style={s.pickerEmoji}>{mascot.placeholder}</Text>
+                        {mascot.image
+                          ? <Image source={mascot.image} style={s.pickerImage} resizeMode="contain" />
+                          : <Text style={s.pickerEmoji}>{mascot.placeholder}</Text>
+                        }
                       </View>
                       <Text style={[s.pickerName, isSelected && s.pickerNameSelected]}>
                         {mascot.name}
@@ -202,13 +254,15 @@ export default function ProfileScreen() {
                 })}
               </View>
 
-              {/* Preview of selected */}
               {pendingMascotId && (() => {
                 const m = getMascotById(pendingMascotId);
                 return m ? (
                   <View style={s.pickerPreview}>
                     <View style={s.pickerPreviewAvatar}>
-                      <Text style={s.pickerPreviewEmoji}>{m.placeholder}</Text>
+                      {m.image
+                        ? <Image source={m.image} style={s.pickerPreviewImage} resizeMode="contain" />
+                        : <Text style={s.pickerPreviewEmoji}>{m.placeholder}</Text>
+                      }
                     </View>
                     <View>
                       <Text style={s.pickerPreviewName}>{m.name}</Text>
@@ -349,6 +403,7 @@ export default function ProfileScreen() {
           </>
         )}
 
+        {/* View caffeine guide — unchanged */}
         <TouchableOpacity style={s.guideToggle} onPress={() => setShowCaffeineGuide((v) => !v)}>
           <Text style={s.guideToggleText}>
             {showCaffeineGuide ? 'Hide caffeine guide' : 'View caffeine guide'}
@@ -366,6 +421,47 @@ export default function ProfileScreen() {
               </View>
             ))}
             <Text style={s.guideNote}>400mg limit ≈ 2 lattes or 4 espressos per day.</Text>
+          </View>
+        )}
+
+        {/* Recommended caffeine intake by age — same style as above */}
+        <TouchableOpacity style={s.guideToggle} onPress={() => setShowAgeGuide((v) => !v)}>
+          <Text style={s.guideToggleText}>
+            {showAgeGuide ? 'Hide recommended intake' : 'Recommended caffeine intake'}
+          </Text>
+        </TouchableOpacity>
+
+        {showAgeGuide && (
+          <View style={s.guideBox}>
+            {CAFFEINE_BY_AGE.map((item) => (
+              <View key={item.range}>
+                <TouchableOpacity
+                  style={s.ageRangeRow}
+                  onPress={() => setExpandedAgeRange((prev) => prev === item.range ? null : item.range)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[s.ageRangeColorBar, { backgroundColor: item.color }]} />
+                  <View style={s.ageRangeMain}>
+                    <Text style={s.ageRangeLabel}>{item.range}</Text>
+                    <Text style={[s.ageRangeLimit, { color: item.color }]}>{item.limit}</Text>
+                  </View>
+                  <Text style={s.ageRangeChevron}>{expandedAgeRange === item.range ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {expandedAgeRange === item.range && (
+                  <View style={s.ageRangeBody}>
+                    <Text style={s.ageRangeNotes}>{item.notes}</Text>
+                    {item.examples.map((ex, i) => (
+                      <View key={i} style={s.ageRangeExample}>
+                        <Text style={[s.ageRangeDot, { color: item.color }]}>•</Text>
+                        <Text style={s.ageRangeExText}>{ex}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            ))}
+            <Text style={s.guideNote}>Sources: NHS, MedStar Health, Caffeine Informer. General guidelines only — consult your doctor if you have health conditions.</Text>
           </View>
         )}
       </View>
@@ -394,11 +490,12 @@ function MascotHeader({ mascotId, displayName, onChangeMascot }: {
 
   return (
     <View style={ms.mascotHeader}>
-      {/* Avatar column — circle + button stacked */}
       <View style={ms.mascotAvatarCol}>
         <View style={[ms.mascotAvatarCircle, !mascot && ms.mascotAvatarCircleFallback]}>
           {mascot
-            ? <Text style={ms.mascotEmoji}>{mascot.placeholder}</Text>
+            ? mascot.image
+              ? <Image source={mascot.image} style={ms.mascotImage} resizeMode="contain" />
+              : <Text style={ms.mascotEmoji}>{mascot.placeholder}</Text>
             : <Text style={ms.mascotFallbackLetter}>
                 {displayName ? displayName[0].toUpperCase() : 'A'}
               </Text>
@@ -409,7 +506,6 @@ function MascotHeader({ mascotId, displayName, onChangeMascot }: {
         </TouchableOpacity>
       </View>
 
-      {/* Name + mascot name */}
       <View style={ms.mascotHeaderText}>
         <Text style={ms.mascotHeaderName}>{displayName || 'Your profile'}</Text>
         {mascot
@@ -424,9 +520,10 @@ function MascotHeader({ mascotId, displayName, onChangeMascot }: {
 const mhStyles = (C: typeof Colors.light) => StyleSheet.create({
   mascotHeader:               { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 28 },
   mascotAvatarCol:            { alignItems: 'center', gap: 8 },
-  mascotAvatarCircle:         { width: 72, height: 72, borderRadius: 36, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
+  mascotAvatarCircle:         { width: 100, height: 100, borderRadius: 50, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
   mascotAvatarCircleFallback: { backgroundColor: C.border },
   mascotEmoji:                { fontSize: 34 },
+  mascotImage:                 { width: 110, height: 110, marginTop: -18 , marginLeft: 8},
   mascotFallbackLetter:       { fontSize: 30, fontWeight: '700', color: '#fff' },
   changeMascotBtn:            { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
   changeMascotBtnText:        { fontSize: 11, color: C.primary, fontWeight: '600' },
@@ -485,10 +582,21 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   guideMgHigh:     { color: '#8b3a3a' },
   guideNote:       { fontSize: 12, color: C.textMuted, marginTop: 8, fontStyle: 'italic' },
 
+  // Age range guide styles
+  ageRangeRow:       { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
+  ageRangeColorBar:  { width: 4, height: 36, borderRadius: 2, marginRight: 10 },
+  ageRangeMain:      { flex: 1 },
+  ageRangeLabel:     { fontSize: 13, fontWeight: '600', color: C.text },
+  ageRangeLimit:     { fontSize: 12, fontWeight: '700', marginTop: 1 },
+  ageRangeChevron:   { fontSize: 10, color: C.textMuted, marginLeft: 8 },
+  ageRangeBody:      { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: C.surface, borderRadius: 8, marginBottom: 4 },
+  ageRangeNotes:     { fontSize: 12, color: C.textSecondary, lineHeight: 18, marginBottom: 8 },
+  ageRangeExample:   { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 3 },
+  ageRangeDot:       { fontSize: 14, marginRight: 5, lineHeight: 18 },
+  ageRangeExText:    { fontSize: 12, color: C.textSecondary, flex: 1 },
+
   logoutBtn:     { backgroundColor: C.surface, borderWidth: 1, borderColor: '#8b3a3a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   logoutBtnText: { color: '#8b3a3a', fontSize: 15, fontWeight: '600' },
-
-
 
   // Mascot picker modal
   pickerOverlay:  { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
@@ -498,20 +606,22 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   pickerClose:    { fontSize: 20, color: C.textMuted, padding: 4 },
   pickerScroll:   { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
 
-  pickerGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  pickerCell:     { width: (Dimensions.get('window').width - 80) / 5, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background, position: 'relative' },
+  pickerGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  pickerCell:     { width: (Dimensions.get('window').width - 68) / 4, alignItems: 'center', paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background, position: 'relative' },
   pickerCellSelected: { borderColor: C.primary, backgroundColor: C.primaryMuted },
 
-  pickerAvatar:         { width: (Dimensions.get('window').width - 80) / 5 - 16, height: (Dimensions.get('window').width - 80) / 5 - 16, borderRadius: ((Dimensions.get('window').width - 80) / 5 - 16) / 2, backgroundColor: C.border, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+  pickerAvatar:         { width: (Dimensions.get('window').width - 68) / 4 - 18, height: (Dimensions.get('window').width - 68) / 4 - 18, borderRadius: ((Dimensions.get('window').width - 68) / 4 - 18) / 2, backgroundColor: C.border, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
   pickerAvatarSelected: { backgroundColor: C.primary },
   pickerEmoji:          { fontSize: 20 },
-  pickerName:           { fontSize: 10, fontWeight: '600', color: C.textMuted, textAlign: 'center' },
+  pickerImage:          { width: 70, height: 70, marginTop: -14 , marginLeft: 6 },
+  pickerPreviewImage:   { width: 80, height: 80, marginTop: -18 , marginLeft: 8 },
+  pickerName:           { fontSize: 11, fontWeight: '600', color: C.textMuted, textAlign: 'center', marginTop: 4 },
   pickerNameSelected:   { color: C.primary },
-  pickerTick:           { position: 'absolute', top: 5, right: 5, width: 15, height: 15, borderRadius: 8, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
-  pickerTickText:       { fontSize: 8, color: '#fff', fontWeight: '700' },
+  pickerTick:           { position: 'absolute', top: 6, right: 6, width: 18, height: 18, borderRadius: 9, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
+  pickerTickText:       { fontSize: 10, color: '#fff', fontWeight: '700' },
 
   pickerPreview:      { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.primaryMuted, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: C.border, marginBottom: 8 },
-  pickerPreviewAvatar:{ width: 48, height: 48, borderRadius: 24, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
+  pickerPreviewAvatar:{ width: 80, height: 80, borderRadius: 40, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center' },
   pickerPreviewEmoji: { fontSize: 24 },
   pickerPreviewName:  { fontSize: 15, fontWeight: '700', color: C.primary },
   pickerPreviewSub:   { fontSize: 12, color: C.textSecondary, marginTop: 1 },
@@ -522,5 +632,4 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   pickerSaveBtn:      { flex: 2, backgroundColor: C.primary, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
   pickerSaveBtnDisabled: { opacity: 0.4 },
   pickerSaveText:     { color: '#fff', fontWeight: '700', fontSize: 15 },
-
 });

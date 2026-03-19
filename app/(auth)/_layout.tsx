@@ -1,12 +1,10 @@
 import { Stack } from 'expo-router';
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 
 let GoogleSignin: any;
 try {
   GoogleSignin = require('@react-native-google-signin/google-signin').GoogleSignin;
-} catch (error) {
-  console.log('Google Sign-In not available in this build');
-}
+} catch {}
 
 export default function AuthLayout() {
   useEffect(() => {

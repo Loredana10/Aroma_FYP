@@ -8,35 +8,9 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
-import { Colors } from '@/constants/theme';
 
 export const unstable_settings = {
   initialRouteName: '(auth)',
-};
-
-// Custom navigation themes using Aroma brown palette
-const AromaLightTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    primary:    '#a67c52',
-    background: '#fdf8f4',
-    card:       '#ffffff',
-    text:       '#2d1f12',
-    border:     '#e8d5c0',
-  },
-};
-
-const AromaDarkTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary:    '#c09a70',
-    background: '#2d1f12',
-    card:       '#4a3320',
-    text:       '#fdf8f4',
-    border:     '#6f4e2e',
-  },
 };
 
 function RouterStack() {
@@ -46,65 +20,74 @@ function RouterStack() {
   const router = useRouter();
   const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
-  const C = Colors[colorScheme ?? 'light'];
 
+  // Use a real-time Firestore listener so when complete-profile writes
+  // profileCompleted: true, this layout immediately sees it and can act
   useEffect(() => {
     if (!user) {
       setProfileCompleted(null);
       setInitialCheckDone(true);
       return;
     }
-    const unsubscribe = onSnapshot(
+
+    setInitialCheckDone(false);
+
+    const unsub = onSnapshot(
       doc(db, 'users', user.uid),
-      (userDoc) => {
-        const completed = userDoc.exists()
-          ? userDoc.data()?.profileCompleted ?? true
-          : true;
-        setProfileCompleted(completed);
+      (snap) => {
+        if (snap.exists()) {
+          setProfileCompleted(snap.data()?.profileCompleted ?? false);
+        } else {
+          // Doc not written yet (race condition on signup) — default to incomplete
+          setProfileCompleted(false);
+        }
         setInitialCheckDone(true);
       },
       (error) => {
-        console.error('Error watching profile:', error);
-        setProfileCompleted(true);
+        console.error('Profile listener error:', error);
+        setProfileCompleted(false);
         setInitialCheckDone(true);
       }
     );
-    return () => unsubscribe();
+
+    return unsub; // Unsubscribe when user changes
   }, [user?.uid]);
 
+  // Handle navigation — only redirect, never interfere while on complete-profile
   useEffect(() => {
     if (loading || !initialCheckDone) return;
-    const inAuthGroup = segments[0] === '(auth)';
-    const onCompleteProfile = segments[segments.length - 1] === 'complete-profile';
+
+    const inAuthGroup        = segments[0] === '(auth)';
+    const onCompleteProfile  = segments[segments.length - 1] === 'complete-profile';
 
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/signin');
     } else if (user && profileCompleted === false && !onCompleteProfile) {
+      // Only push to complete-profile if not already there
       router.replace('/(auth)/complete-profile');
     } else if (user && profileCompleted === true && inAuthGroup) {
+      // Profile is done — move to app (this fires automatically when
+      // complete-profile writes profileCompleted: true to Firestore)
       router.replace('/(tabs)');
     }
   }, [user, loading, profileCompleted, initialCheckDone, segments]);
 
   if (loading || !initialCheckDone) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.background }}>
-        <ActivityIndicator size="large" color={C.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
+        <ActivityIndicator size="large" />
       </View>
     );
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? AromaDarkTheme : AromaLightTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: 'modal', headerShown: true, title: '' }}
-        />
+        <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: true, title: 'Modal' }} />
       </Stack>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style="auto" />
     </ThemeProvider>
   );
 }

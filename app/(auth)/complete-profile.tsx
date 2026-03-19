@@ -171,6 +171,8 @@ export default function CompleteProfile() {
           }),
         });
       } catch {}
+
+      router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -193,11 +195,9 @@ export default function CompleteProfile() {
 
       {/* Header */}
       <View style={s.header}>
-        <Image
-          source={require('@/assets/images/app_logo.png')}
-          style={s.logoMark}
-          resizeMode="contain"
-        />
+        <View style={s.logoMark}>
+          <Text style={s.logoLetter}>A</Text>
+        </View>
         <Text style={s.greeting}>Hello, {displayName}</Text>
         <Text style={s.subtitle}>Let's set up your profile</Text>
       </View>
@@ -229,9 +229,11 @@ export default function CompleteProfile() {
                   onPress={() => setMascotId(mascot.id)}
                   activeOpacity={0.8}
                 >
-                  {/* Placeholder circle — swap for <Image> when real assets are ready */}
                   <View style={[s.mascotAvatar, isSelected && s.mascotAvatarSelected]}>
-                    <Text style={s.mascotEmoji}>{mascot.placeholder}</Text>
+                    {mascot.image
+                      ? <Image source={mascot.image} style={s.mascotImageThumb} resizeMode="contain" />
+                      : <Text style={s.mascotEmoji}>{mascot.placeholder}</Text>
+                    }
                   </View>
                   <Text style={[s.mascotName, isSelected && s.mascotNameSelected]}>
                     {mascot.name}
@@ -250,7 +252,10 @@ export default function CompleteProfile() {
           {selectedMascot && (
             <View style={s.mascotPreview}>
               <View style={s.mascotPreviewAvatar}>
-                <Text style={s.mascotPreviewEmoji}>{selectedMascot.placeholder}</Text>
+                {selectedMascot.image
+                  ? <Image source={selectedMascot.image} style={s.mascotPreviewImage} resizeMode="contain" />
+                  : <Text style={s.mascotPreviewEmoji}>{selectedMascot.placeholder}</Text>
+                }
               </View>
               <View>
                 <Text style={s.mascotPreviewName}>{selectedMascot.name}</Text>
@@ -438,7 +443,9 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   mascotAvatarSelected: {
     backgroundColor: C.primary,
   },
-  mascotEmoji: { fontSize: CELL_SIZE * 0.32 },
+  mascotEmoji:      { fontSize: CELL_SIZE * 0.32 },
+  mascotImageThumb: { width: CELL_SIZE * 0.78, height: CELL_SIZE * 0.78 },
+  mascotPreviewImage: { width: 46, height: 46 },
 
   mascotName: {
     fontSize:   10,

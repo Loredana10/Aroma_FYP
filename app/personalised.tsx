@@ -9,11 +9,12 @@ import { db } from '@/firebaseConfig';
 import { useAuth } from '@/contexts/auth_context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@/constants/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── SHARED DIETARY OPTIONS ──────────────────────────────────────────────────
-// These must match exactly what is stored in Firestore and shown in profile/onboarding
 
 export const DIETARY_OPTIONS = [
   { value: 'Dairy-free',  label: 'Dairy-free',  icon: '🥛', sublabel: 'No milk, cream or dairy' },
@@ -25,30 +26,15 @@ export const DIETARY_OPTIONS = [
 // ─── QUESTION DATA ────────────────────────────────────────────────────────────
 
 const MOOD_OPTIONS = [
-  {
-    value:    'Tired and need a boost',
-    label:    'Need a boost',
-    sublabel: 'Tired and looking for energy',
-    icon:     '⚡',
-  },
-  {
-    value:    'Fairly okay, just want a drink',
-    label:    'Just fancy a drink',
-    sublabel: 'No particular need, just enjoying one',
-    icon:     '☕',
-  },
-  {
-    value:    'Relaxed and winding down',
-    label:    'Winding down',
-    sublabel: 'Relaxed, nothing too intense',
-    icon:     '🌙',
-  },
+  { value: 'Tired and need a boost',         label: 'Need a boost',      sublabel: 'Tired and looking for energy',          icon: '⚡' },
+  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink', sublabel: 'No particular need, just enjoying one', icon: '☕' },
+  { value: 'Relaxed and winding down',       label: 'Winding down',      sublabel: 'Relaxed, nothing too intense',          icon: '🌙' },
 ];
 
 const TIME_OPTIONS = [
-  { value: 'Morning',   label: 'Morning',   sublabel: 'Before midday',  icon: '🌅' },
-  { value: 'Afternoon', label: 'Afternoon', sublabel: 'Midday to 5pm',  icon: '☀️' },
-  { value: 'Evening',   label: 'Evening',   sublabel: 'After 5pm',      icon: '🌆' },
+  { value: 'Morning',   label: 'Morning',   sublabel: 'Before midday', icon: '🌅' },
+  { value: 'Afternoon', label: 'Afternoon', sublabel: 'Midday to 5pm', icon: '☀️' },
+  { value: 'Evening',   label: 'Evening',   sublabel: 'After 5pm',     icon: '🌆' },
 ];
 
 const WEATHER_OPTIONS = [
@@ -56,27 +42,49 @@ const WEATHER_OPTIONS = [
   { value: 'Cold',     label: 'Cold', sublabel: 'Chilly or rainy',       icon: '🌧️' },
 ];
 
+const EXPLORE_OPTIONS = [
+  { value: 'new',   label: 'Something new',           sublabel: "Discover drinks I haven't tried yet",            icon: '✨' },
+  { value: 'tried', label: 'Include drinks I\'ve tried', sublabel: "Show me anything — including drinks I\'ve had before", icon: '☕' },
+];
+
 const STEP_TITLES = [
+  'What are you looking for?',
   'How are you feeling?',
   'What time of day is it?',
-  'What\'s the weather like?',
+  "What's the weather like?",
   'Any dietary needs?',
 ];
 
 const STEP_SUBTITLES = [
+  'Tell us whether you want to discover something new or revisit a favourite',
   'This helps us match a drink to your current energy and mood',
-  'We\'ll suggest something suited to the time of day',
+  "We'll suggest something suited to the time of day",
   'Hot or cold drinks depend on the weather',
-  'We\'ll filter out anything that doesn\'t suit you',
+  "We'll filter out anything that doesn't suit you",
 ];
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 interface QuestionnaireData {
+  exploreNew:          string;
   mood:                string;
   timeOfDay:           string;
   weather:             string;
   dietaryRestrictions: string[];
+}
+
+interface Recommendation {
+  drink_id:      number;
+  name:          string;
+  category:      string;
+  type:          string;
+  caffeine_mg:   number;
+  dairy_free:    boolean;
+  vegan:         boolean;
+  gluten_free:   boolean;
+  score:         number;
+  match_percent: number;
+  score_breakdown: { content: number; collaborative: number };
 }
 
 type Step = 0 | 1 | 2 | 3 | 4;
@@ -91,6 +99,7 @@ export default function PersonalisedScreen() {
   const s = makeStyles(C);
 
   const [step,                setStep]                = useState<Step>(0);
+  const [exploreNew,          setExploreNew]          = useState<string | null>(null);
   const [mood,                setMood]                = useState<string | null>(null);
   const [timeOfDay,           setTimeOfDay]           = useState<string | null>(null);
   const [weather,             setWeather]             = useState<string | null>(null);
@@ -98,16 +107,19 @@ export default function PersonalisedScreen() {
   const [result,              setResult]              = useState<QuestionnaireData | null>(null);
 
   // Profile dietary state
-  const [profileDietary,     setProfileDietary]     = useState<string[]>([]);
-  const [loadingProfile,     setLoadingProfile]      = useState(true);
+  const [profileDietary, setProfileDietary] = useState<string[]>([]);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  // Recommendation state
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [loadingRecs,     setLoadingRecs]     = useState(false);
+  const [savedId,         setSavedId]         = useState<number | null>(null);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // ─── LOAD PROFILE DIETARY ON MOUNT ─────────────────────────────────────────
+  // ─── LOAD PROFILE DIETARY ON MOUNT ───────────────────────────────────────
 
-  useEffect(() => {
-    loadProfileDietary();
-  }, [user]);
+  useEffect(() => { loadProfileDietary(); }, [user]);
 
   const loadProfileDietary = async () => {
     if (!user) { setLoadingProfile(false); return; }
@@ -116,10 +128,8 @@ export default function PersonalisedScreen() {
       if (snap.exists()) {
         const data = snap.data();
         const restrictions: string[] = (data.dietaryRestrictions || [])
-          // Filter to only the options we surface in this screen (exclude legacy values like 'None')
           .filter((r: string) => DIETARY_OPTIONS.some((o) => o.value === r));
         setProfileDietary(restrictions);
-        // Pre-fill the dietary step with profile values
         setDietaryRestrictions(restrictions);
       }
     } catch (e) {
@@ -129,7 +139,7 @@ export default function PersonalisedScreen() {
     }
   };
 
-  // ─── PROGRESS ANIMATION ────────────────────────────────────────────────────
+  // ─── PROGRESS ANIMATION ──────────────────────────────────────────────────
 
   const animateProgress = (to: number) => {
     Animated.spring(progressAnim, {
@@ -141,7 +151,7 @@ export default function PersonalisedScreen() {
     inputRange: [0, 1], outputRange: ['0%', '100%'], extrapolate: 'clamp',
   });
 
-  // ─── NAVIGATION ────────────────────────────────────────────────────────────
+  // ─── NAVIGATION ──────────────────────────────────────────────────────────
 
   const goNext = () => {
     const next = (step + 1) as Step;
@@ -156,65 +166,51 @@ export default function PersonalisedScreen() {
     animateProgress(prev / 3);
   };
 
+  const proceed = (data: QuestionnaireData) => {
+    setResult(data);
+    setStep(4);
+    animateProgress(1);
+    fetchRecommendations(data);
+  };
+
   const handleSubmit = () => {
     const data: QuestionnaireData = {
-      mood:                mood!,
-      timeOfDay:           timeOfDay!,
-      weather:             weather!,
-      dietaryRestrictions,
+      exploreNew: exploreNew!, mood: mood!, timeOfDay: timeOfDay!, weather: weather!, dietaryRestrictions,
     };
 
-    // Check if the user changed their dietary restrictions from their profile
-    const profileSet  = new Set(profileDietary);
-    const currentSet  = new Set(dietaryRestrictions);
-    const hasChanged  =
+    const profileSet = new Set(profileDietary);
+    const currentSet = new Set(dietaryRestrictions);
+    const hasChanged =
       dietaryRestrictions.some((r) => !profileSet.has(r)) ||
       profileDietary.some((r) => !currentSet.has(r));
 
     if (hasChanged && profileDietary.length > 0) {
-      // Prompt to update profile
       Alert.alert(
         'Update your profile?',
         'Your dietary preferences have changed. Would you like to save these as your default for future recommendations?',
         [
-          {
-            text: 'Just this once',
-            style: 'cancel',
-            onPress: () => { setResult(data); setStep(4); animateProgress(1); },
-          },
+          { text: 'Just this once', style: 'cancel', onPress: () => proceed(data) },
           {
             text: 'Update profile',
             onPress: async () => {
               try {
-                // Save the new restrictions (merge with non-dietary profile values)
                 const snap = await getDoc(doc(db, 'users', user!.uid));
                 const existing = snap.exists() ? snap.data() : {};
-                // Keep 'None' if user has cleared all restrictions
                 const toSave = dietaryRestrictions.length === 0 ? ['None'] : dietaryRestrictions;
-                await updateDoc(doc(db, 'users', user!.uid), {
-                  ...existing,
-                  dietaryRestrictions: toSave,
-                });
+                await updateDoc(doc(db, 'users', user!.uid), { ...existing, dietaryRestrictions: toSave });
                 setProfileDietary(dietaryRestrictions);
-              } catch (e) {
-                console.error('Failed to update profile dietary:', e);
-              }
-              setResult(data); setStep(4); animateProgress(1);
+              } catch (e) { console.error('Failed to update profile dietary:', e); }
+              proceed(data);
             },
           },
         ]
       );
     } else if (hasChanged && profileDietary.length === 0) {
-      // No profile restrictions set yet — silently offer to save
       Alert.alert(
         'Save to your profile?',
         'Would you like to save these dietary preferences to your profile for future recommendations?',
         [
-          {
-            text: 'No thanks',
-            style: 'cancel',
-            onPress: () => { setResult(data); setStep(4); animateProgress(1); },
-          },
+          { text: 'No thanks', style: 'cancel', onPress: () => proceed(data) },
           {
             text: 'Save',
             onPress: async () => {
@@ -224,20 +220,21 @@ export default function PersonalisedScreen() {
                 });
                 setProfileDietary(dietaryRestrictions);
               } catch {}
-              setResult(data); setStep(4); animateProgress(1);
+              proceed(data);
             },
           },
         ]
       );
     } else {
-      setResult(data); setStep(4); animateProgress(1);
+      proceed(data);
     }
   };
 
   const handleReset = () => {
     setMood(null); setTimeOfDay(null); setWeather(null);
-    setDietaryRestrictions(profileDietary); // reset to profile values
-    setResult(null); setStep(0); animateProgress(0);
+    setDietaryRestrictions(profileDietary);
+    setResult(null); setRecommendations([]); setSavedId(null);
+    setStep(0); animateProgress(0);
   };
 
   const toggleDietary = (v: string) => {
@@ -247,14 +244,87 @@ export default function PersonalisedScreen() {
   };
 
   const canProceed = () => {
-    if (step === 0) return !!mood;
-    if (step === 1) return !!timeOfDay;
-    if (step === 2) return !!weather;
-    if (step === 3) return true; // optional
+    if (step === 0) return !!exploreNew;
+    if (step === 1) return !!mood;
+    if (step === 2) return !!timeOfDay;
+    if (step === 3) return !!weather;
+    if (step === 4) return true;
     return false;
   };
 
-  // ─── LOADING ───────────────────────────────────────────────────────────────
+  // ─── FETCH RECOMMENDATIONS ───────────────────────────────────────────────
+
+  const fetchRecommendations = async (data: QuestionnaireData) => {
+    if (!user) return;
+    setLoadingRecs(true);
+    setRecommendations([]);
+    setSavedId(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/recommendations`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:              user.uid,
+          mood:                 data.mood,
+          time_of_day:          data.timeOfDay,
+          weather:              data.weather,
+          dietary_restrictions: data.dietaryRestrictions,
+          explore_new: data.exploreNew === 'new',
+        }),
+      });
+      if (!res.ok) throw new Error(`Server ${res.status}`);
+      const json = await res.json();
+      setRecommendations(json.recommendations || []);
+    } catch (err) {
+      console.error('Recommendation fetch error:', err);
+      Alert.alert(
+        'Could not load recommendations',
+        'Make sure the server is running and try again.'
+      );
+    } finally {
+      setLoadingRecs(false);
+    }
+  };
+
+  // ─── SAVE TO HOME SCREEN ─────────────────────────────────────────────────
+  // Writes the chosen drink to AsyncStorage as a pending recommendation.
+  // The home screen reads this and shows the "come back and log it" card.
+
+  const handleSaveDrink = async (rec: Recommendation) => {
+    if (!user) return;
+    try {
+      // Save the recommendation including the questionnaire context so that
+      // when the user logs it from the home screen, mood/time/weather are
+      // stored in both the logs and ratings tables automatically.
+      const pending = {
+        drink_id:    rec.drink_id,
+        name:        rec.name,
+        category:    rec.category,
+        type:        rec.type,
+        caffeine_mg: rec.caffeine_mg,
+        dairy_free:  rec.dairy_free,
+        vegan:       rec.vegan,
+        gluten_free: rec.gluten_free,
+        saved_at:    new Date().toISOString(),
+        // Questionnaire context — passed to logs/ratings when drink is logged
+        // 'result' is the QuestionnaireData state set when the questionnaire completes
+        mood:        result?.mood        ?? null,
+        time_of_day: result?.timeOfDay   ?? null,
+        weather:     result?.weather     ?? null,
+        is_recommended: true,
+      };
+      await AsyncStorage.setItem(
+        `pending_recommendation_${user.uid}`,
+        JSON.stringify(pending)
+      );
+      setSavedId(rec.drink_id);
+    } catch (err) {
+      console.error('Save drink error:', err);
+      Alert.alert('Error', 'Could not save this drink. Please try again.');
+    }
+  };
+
+  // ─── LOADING ─────────────────────────────────────────────────────────────
 
   if (loadingProfile) {
     return (
@@ -264,7 +334,7 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // ─── RESULTS ───────────────────────────────────────────────────────────────
+  // ─── RESULTS (step 4) ────────────────────────────────────────────────────
 
   if (step === 4 && result) {
     return (
@@ -280,11 +350,12 @@ export default function PersonalisedScreen() {
           </Text>
         </View>
 
+        {/* Summary card — unchanged */}
         <View style={s.summaryCard}>
           {[
-            { label: 'Your mood',            value: result.mood },
-            { label: 'Time of day',           value: result.timeOfDay },
-            { label: 'Weather',               value: result.weather },
+            { label: 'Your mood',           value: result.mood },
+            { label: 'Time of day',          value: result.timeOfDay },
+            { label: 'Weather',              value: result.weather },
             {
               label: 'Dietary restrictions',
               value: result.dietaryRestrictions.length > 0
@@ -299,13 +370,72 @@ export default function PersonalisedScreen() {
           ))}
         </View>
 
-        {/* Placeholder — replace with rec output once backend is wired up */}
-        <View style={s.recPlaceholder}>
-          <Text style={s.recPlaceholderTitle}>Recommendation coming soon</Text>
-          <Text style={s.recPlaceholderSub}>
-            The recommendation engine will appear here once connected to this screen.
-          </Text>
-        </View>
+        {/* Recommendations section */}
+        <Text style={s.recSectionTitle}>Your recommendations</Text>
+
+        {loadingRecs ? (
+          <View style={s.recLoading}>
+            <ActivityIndicator size="large" color={C.primary} />
+            <Text style={s.recLoadingText}>Finding your perfect drink...</Text>
+          </View>
+        ) : recommendations.length === 0 ? (
+          <View style={s.recPlaceholder}>
+            <Text style={s.recPlaceholderTitle}>No recommendations found</Text>
+            <Text style={s.recPlaceholderSub}>
+              Try adjusting your dietary preferences or start over.
+            </Text>
+          </View>
+        ) : (
+          recommendations.map((rec, index) => {
+            const isSaved = savedId === rec.drink_id;
+            return (
+              <View key={rec.drink_id} style={s.recCard}>
+
+                {/* Rank + match */}
+                <View style={s.recCardTop}>
+                  <View style={s.rankBadge}>
+                    <Text style={s.rankBadgeText}>#{index + 1}</Text>
+                  </View>
+                  <View style={s.matchPill}>
+                    <Text style={s.matchPillText}>{rec.match_percent}% match</Text>
+                  </View>
+                </View>
+
+                {/* Name + meta */}
+                <Text style={s.recName}>{rec.name}</Text>
+                <Text style={s.recMeta}>
+                  {rec.category}  ·  {rec.type}  ·  {rec.caffeine_mg}mg caffeine
+                </Text>
+
+                {/* Dietary badges */}
+                {(rec.dairy_free || rec.vegan || rec.gluten_free) && (
+                  <View style={s.badgeRow}>
+                    {rec.dairy_free  && <View style={s.badge}><Text style={s.badgeText}>Dairy-free</Text></View>}
+                    {rec.vegan       && <View style={s.badge}><Text style={s.badgeText}>Vegan</Text></View>}
+                    {rec.gluten_free && <View style={s.badge}><Text style={s.badgeText}>Gluten-free</Text></View>}
+                  </View>
+                )}
+
+                {/* Save button */}
+                <TouchableOpacity
+                  style={[s.saveBtn, isSaved && s.saveBtnDone]}
+                  onPress={() => { if (!isSaved) handleSaveDrink(rec); }}
+                  activeOpacity={isSaved ? 1 : 0.8}
+                >
+                  <Text style={[s.saveBtnText, isSaved && s.saveBtnTextDone]}>
+                    {isSaved ? 'Saved to home screen' : "That's my drink"}
+                  </Text>
+                </TouchableOpacity>
+
+                {isSaved && (
+                  <Text style={s.savedHint}>
+                    Go enjoy it! Your home screen will remind you to log it when you're done.
+                  </Text>
+                )}
+              </View>
+            );
+          })
+        )}
 
         <TouchableOpacity style={s.primaryBtn} onPress={handleReset} activeOpacity={0.8}>
           <Text style={s.primaryBtnText}>Start over</Text>
@@ -319,7 +449,7 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // ─── QUESTIONNAIRE ─────────────────────────────────────────────────────────
+  // ─── QUESTIONNAIRE ───────────────────────────────────────────────────────
 
   return (
     <View style={s.root}>
@@ -330,7 +460,7 @@ export default function PersonalisedScreen() {
           <TouchableOpacity style={s.backBtn} onPress={goBack} activeOpacity={0.7}>
             <Text style={s.backBtnText}>‹  Back</Text>
           </TouchableOpacity>
-          <Text style={s.stepCounter}>{step + 1} / 4</Text>
+          <Text style={s.stepCounter}>{step + 1} / 5</Text>
         </View>
 
         {/* Progress bar */}
@@ -344,47 +474,50 @@ export default function PersonalisedScreen() {
           <Text style={s.questionSub}>{STEP_SUBTITLES[step]}</Text>
         </View>
 
-        {/* Step 0 — Mood */}
+        {/* Step 0 — Explore new or tried */}
         {step === 0 && (
           <View style={s.optionGroup}>
-            {MOOD_OPTIONS.map((o) => (
-              <OptionCard
-                key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
-                selected={mood === o.value} onPress={() => setMood(o.value)} s={s}
-              />
+            {EXPLORE_OPTIONS.map((o) => (
+              <OptionCard key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
+                selected={exploreNew === o.value} onPress={() => setExploreNew(o.value)} s={s} />
             ))}
           </View>
         )}
 
-        {/* Step 1 — Time */}
+        {/* Step 1 — Mood */}
         {step === 1 && (
           <View style={s.optionGroup}>
-            {TIME_OPTIONS.map((o) => (
-              <OptionCard
-                key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
-                selected={timeOfDay === o.value} onPress={() => setTimeOfDay(o.value)} s={s}
-              />
+            {MOOD_OPTIONS.map((o) => (
+              <OptionCard key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
+                selected={mood === o.value} onPress={() => setMood(o.value)} s={s} />
             ))}
           </View>
         )}
 
-        {/* Step 2 — Weather */}
+        {/* Step 2 — Time */}
         {step === 2 && (
           <View style={s.optionGroup}>
-            {WEATHER_OPTIONS.map((o) => (
-              <OptionCard
-                key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
-                selected={weather === o.value} onPress={() => setWeather(o.value)} s={s}
-              />
+            {TIME_OPTIONS.map((o) => (
+              <OptionCard key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
+                selected={timeOfDay === o.value} onPress={() => setTimeOfDay(o.value)} s={s} />
             ))}
           </View>
         )}
 
-        {/* Step 3 — Dietary */}
+        {/* Step 3 — Weather */}
         {step === 3 && (
           <View style={s.optionGroup}>
+            {WEATHER_OPTIONS.map((o) => (
+              <OptionCard key={o.value} icon={o.icon} label={o.label} sublabel={o.sublabel}
+                selected={weather === o.value} onPress={() => setWeather(o.value)} s={s} />
+            ))}
+          </View>
+        )}
 
-            {/* Profile pre-fill banner — only shown if profile has restrictions set */}
+        {/* Step 4 — Dietary */}
+        {step === 4 && (
+          <View style={s.optionGroup}>
+
             {profileDietary.length > 0 && (
               <View style={s.profileBanner}>
                 <Text style={s.profileBannerIcon}>👤</Text>
@@ -397,11 +530,10 @@ export default function PersonalisedScreen() {
               </View>
             )}
 
-            {/* Dietary chips */}
             <View style={s.dietaryGrid}>
               {DIETARY_OPTIONS.map((o) => {
-                const selected      = dietaryRestrictions.includes(o.value);
-                const fromProfile   = profileDietary.includes(o.value);
+                const selected    = dietaryRestrictions.includes(o.value);
+                const fromProfile = profileDietary.includes(o.value);
                 return (
                   <TouchableOpacity
                     key={o.value}
@@ -411,12 +543,8 @@ export default function PersonalisedScreen() {
                   >
                     <Text style={s.dietaryIcon}>{o.icon}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={[s.dietaryLabel, selected && s.dietaryLabelSelected]}>
-                        {o.label}
-                      </Text>
-                      {fromProfile && (
-                        <Text style={s.dietaryFromProfile}>From your profile</Text>
-                      )}
+                      <Text style={[s.dietaryLabel, selected && s.dietaryLabelSelected]}>{o.label}</Text>
+                      {fromProfile && <Text style={s.dietaryFromProfile}>From your profile</Text>}
                     </View>
                     {selected && (
                       <View style={s.dietaryTick}>
@@ -434,22 +562,18 @@ export default function PersonalisedScreen() {
               </TouchableOpacity>
             )}
 
-            <Text style={s.skipNote}>
-              Optional — leave all unselected if none apply.
-            </Text>
+            <Text style={s.skipNote}>Optional — leave all unselected if none apply.</Text>
           </View>
         )}
 
         {/* CTA */}
         <TouchableOpacity
           style={[s.primaryBtn, !canProceed() && s.primaryBtnDisabled]}
-          onPress={step === 3 ? handleSubmit : goNext}
+          onPress={step === 4 ? handleSubmit : goNext}
           disabled={!canProceed()}
           activeOpacity={0.8}
         >
-          <Text style={s.primaryBtnText}>
-            {step === 3 ? 'Find my drink' : 'Continue'}
-          </Text>
+          <Text style={s.primaryBtnText}>{step === 4 ? 'Find my drink' : 'Continue'}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -504,10 +628,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
 
   optionGroup: { gap: 12, marginBottom: 32 },
 
-  optionCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
-    borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: C.border, gap: 14,
-  },
+  optionCard:             { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: C.border, gap: 14 },
   optionCardSelected:     { borderColor: C.primary, backgroundColor: C.primaryMuted },
   optionIconWrap:         { width: 48, height: 48, borderRadius: 12, backgroundColor: C.background, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   optionIconWrapSelected: { backgroundColor: C.surface },
@@ -518,29 +639,19 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   optionSublabel:         { fontSize: 12, color: C.textMuted, lineHeight: 17 },
   optionSublabelSelected: { color: C.textSecondary },
 
-  optionRadio:       { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+  optionRadio:         { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: C.border, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   optionRadioSelected: { borderColor: C.primary },
-  optionRadioInner:  { width: 10, height: 10, borderRadius: 5, backgroundColor: C.primary },
+  optionRadioInner:    { width: 10, height: 10, borderRadius: 5, backgroundColor: C.primary },
 
-  // Profile pre-fill banner
-  profileBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: C.primaryMuted, borderRadius: 12,
-    padding: 14, borderWidth: 1, borderColor: C.border, marginBottom: 4,
-  },
+  // Profile banner
+  profileBanner:      { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: C.primaryMuted, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border, marginBottom: 4 },
   profileBannerIcon:  { fontSize: 18, marginTop: 1 },
   profileBannerTitle: { fontSize: 13, fontWeight: '700', color: C.primary, marginBottom: 2 },
   profileBannerSub:   { fontSize: 12, color: C.textSecondary, lineHeight: 17 },
 
   // Dietary chips
-  dietaryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
-  dietaryChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: C.surface, borderRadius: 14,
-    paddingVertical: 13, paddingHorizontal: 14,
-    borderWidth: 1.5, borderColor: C.border,
-    width: (SCREEN_WIDTH - 68) / 2,
-  },
+  dietaryGrid:          { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  dietaryChip:          { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.surface, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1.5, borderColor: C.border, width: (SCREEN_WIDTH - 68) / 2 },
   dietaryChipSelected:  { borderColor: C.primary, backgroundColor: C.primaryMuted },
   dietaryIcon:          { fontSize: 18, flexShrink: 0 },
   dietaryLabel:         { fontSize: 13, fontWeight: '600', color: C.text },
@@ -560,20 +671,50 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   ghostBtn:           { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
   ghostBtnText:       { color: C.textMuted, fontSize: 15, fontWeight: '500' },
 
-  // Results
+  // Results header
   resultsHeader:    { alignItems: 'center', marginBottom: 32, paddingTop: 8 },
   resultsCheck:     { width: 60, height: 60, borderRadius: 30, backgroundColor: C.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   resultsCheckText: { fontSize: 26, color: '#fff', fontWeight: '700' },
   resultsTitle:     { fontSize: 24, fontWeight: '700', color: C.text, marginBottom: 6 },
   resultsSub:       { fontSize: 14, color: C.textMuted, textAlign: 'center', lineHeight: 20 },
 
-  summaryCard:      { backgroundColor: C.surface, borderRadius: 16, padding: 4, borderWidth: 1, borderColor: C.border, marginBottom: 20, shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
+  // Summary card
+  summaryCard:      { backgroundColor: C.surface, borderRadius: 16, padding: 4, borderWidth: 1, borderColor: C.border, marginBottom: 24, shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
   summaryRow:       { paddingVertical: 14, paddingHorizontal: 16 },
   summaryRowBorder: { borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
   summaryLabel:     { fontSize: 11, color: C.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   summaryValue:     { fontSize: 15, color: C.text, fontWeight: '600' },
 
+  // Recommendations
+  recSectionTitle: { fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 14 },
+
+  recLoading:     { alignItems: 'center', paddingVertical: 40 },
+  recLoadingText: { marginTop: 14, fontSize: 14, color: C.textMuted },
+
   recPlaceholder:      { backgroundColor: C.primaryMuted, borderRadius: 14, padding: 20, borderWidth: 1, borderColor: C.border, alignItems: 'center', marginBottom: 24 },
   recPlaceholderTitle: { fontSize: 15, fontWeight: '700', color: C.primary, marginBottom: 6 },
   recPlaceholderSub:   { fontSize: 13, color: C.textSecondary, textAlign: 'center', lineHeight: 19 },
+
+  recCard:    { backgroundColor: C.surface, borderRadius: 16, padding: 18, borderWidth: 1, borderColor: C.border, marginBottom: 14, shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6, elevation: 2 },
+  recCardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+
+  rankBadge:     { backgroundColor: C.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  rankBadgeText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  matchPill:     { backgroundColor: C.primaryMuted, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  matchPillText: { fontSize: 12, fontWeight: '600', color: C.primary },
+
+  recName: { fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 4 },
+  recMeta: { fontSize: 13, color: C.textMuted, marginBottom: 10 },
+
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
+  badge:     { backgroundColor: C.background, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: C.border },
+  badgeText: { fontSize: 11, color: C.textSecondary, fontWeight: '600' },
+
+  saveBtn:         { backgroundColor: C.primary, paddingVertical: 13, borderRadius: 10, alignItems: 'center' },
+  saveBtnDone:     { backgroundColor: C.primaryMuted },
+  saveBtnText:     { color: '#fff', fontSize: 14, fontWeight: '600' },
+  saveBtnTextDone: { color: C.primary },
+
+  savedHint: { fontSize: 12, color: C.textMuted, textAlign: 'center', marginTop: 10, lineHeight: 17 },
 });

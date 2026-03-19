@@ -2,31 +2,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Mascot definitions for the Aroma app.
 //
-// HOW TO ADD REAL IMAGES:
-//   1. Add your image files to assets/mascots/ (e.g. mascot_01.png)
-//   2. Replace the `placeholder` emoji with:
-//      image: require('@/assets/mascots/mascot_01.png')
-//   3. Remove the `placeholder` field once images are in place.
+// ADDING REAL IMAGES:
+//   - Add your PNG to assets/mascots/ (e.g. Cat1.png)
+//   - Set image: require('@/assets/mascots/Cat1.png')
+//   - You can leave placeholder on the ones not yet designed — they'll
+//     fall back to the emoji automatically everywhere in the app.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface Mascot {
-  id:          string;
-  name:        string;
-  placeholder: string;   // emoji used until real artwork is ready
-  // image?: any;         // uncomment when real assets are added
+  id:           string;
+  name:         string;
+  placeholder:  string;  // emoji fallback — always required
+  image?:       any;     // optional — set when real PNG is ready
 }
 
 export const MASCOTS: Mascot[] = [
-  { id: 'mascot_01', name: 'Brewster',  placeholder: '☕' },
-  { id: 'mascot_02', name: 'Frothy',    placeholder: '🧋' },
-  { id: 'mascot_03', name: 'Espresso',  placeholder: '⚡' },
-  { id: 'mascot_04', name: 'Matcha',    placeholder: '🍵' },
-  { id: 'mascot_05', name: 'Coco',      placeholder: '🌿' },
-  { id: 'mascot_06', name: 'Mocha',     placeholder: '🍫' },
-  { id: 'mascot_07', name: 'Biscotti',  placeholder: '🍪' },
-  { id: 'mascot_08', name: 'Hazel',     placeholder: '🌰' },
-  { id: 'mascot_09', name: 'Icy',       placeholder: '🧊' },
-  { id: 'mascot_10', name: 'Sunny',     placeholder: '🌻' },
+  { id: 'mascot_01', name: 'Coco',  placeholder: '☕', image: require('@/assets/mascots/Cat1.png') },
+  { id: 'mascot_02', name: 'Milky',    placeholder: '🧋', image: require('@/assets/mascots/Cat2.png') },
+  { id: 'mascot_03', name: 'Espresso',  placeholder: '⚡', image: require('@/assets/mascots/Cat3.png') },
+  { id: 'mascot_04', name: 'Matcha',    placeholder: '🍵', image: require('@/assets/mascots/Cat4.png') },
+  { id: 'mascot_05', name: 'Mint',      placeholder: '🌿', image: require('@/assets/mascots/Cat5.png') },
+  { id: 'mascot_06', name: 'Mocha',     placeholder: '🍫', image: require('@/assets/mascots/Cat6.png') },
+  { id: 'mascot_07', name: 'Caramel',  placeholder: '🍪', image: require('@/assets/mascots/Cat7.png') },
+  { id: 'mascot_08', name: 'Almond',     placeholder: '🌰', image: require('@/assets/mascots/Cat8.png') },
+  { id: 'mascot_09', name: 'Icy',       placeholder: '🧊', image: require('@/assets/mascots/Cat9.png') },
+  { id: 'mascot_10', name: 'Vanilla',     placeholder: '🌻', image: require('@/assets/mascots/Cat10.png') },
 ];
 
 export const getMascotById = (id: string): Mascot | undefined =>

@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, Modal,
-  FlatList, Alert, ActivityIndicator, ScrollView, SectionList,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '@/contexts/auth_context';
 import { API_BASE_URL } from '@/constants/api';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/contexts/auth_context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator, Alert, FlatList, Modal,
+  ScrollView, SectionList, StyleSheet, Text,
+  TouchableOpacity, View,
+} from 'react-native';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -18,8 +20,16 @@ interface Drink {
   milk_alternative_available: boolean;
 }
 
+interface LogContext {
+  mood?:        string;
+  time_of_day?: string;
+  weather?:     string;
+}
+
 interface LoggedDrink extends Drink {
   logged_at: string; user_rating?: number; log_id?: number;
+  is_recommended?: boolean;
+  mood?: string; time_of_day?: string; weather?: string;
 }
 
 interface DrinkAverage {
@@ -29,6 +39,25 @@ interface DrinkAverage {
 interface DaySection {
   title: string; dateKey: string; totalCaffeine: number; data: LoggedDrink[];
 }
+
+// ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
+
+const MOOD_OPTIONS = [
+  { value: 'Tired and need a boost',         label: 'Need a boost'},
+  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink'},
+  { value: 'Relaxed and winding down',       label: 'Winding down'},
+];
+
+const TIME_OPTIONS = [
+  { value: 'Morning',   label: 'Morning'},
+  { value: 'Afternoon', label: 'Afternoon'},
+  { value: 'Evening',   label: 'Evening'},
+];
+
+const WEATHER_OPTIONS = [
+  { value: 'Hot/Warm', label: 'Warm'},
+  { value: 'Cold',     label: 'Cold'},
+];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +109,30 @@ const Stars = ({
   </View>
 );
 
+// ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
+
+function ContextPillRow({ options, selected, onSelect, s }: {
+  options: { value: string; label: string}[];
+  selected: string | undefined;
+  onSelect: (v: string) => void;
+  s: any;
+}) {
+  return (
+    <View style={s.pillRow}>
+      {options.map((o) => (
+        <TouchableOpacity
+          key={o.value}
+          style={[s.pill, selected === o.value && s.pillSelected]}
+          onPress={() => onSelect(selected === o.value ? '' : o.value)}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.pillText, selected === o.value && s.pillTextSelected]}>{o.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 
 export default function LogScreen() {
@@ -94,26 +147,35 @@ export default function LogScreen() {
   const [categories,       setCategories]       = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [averages,         setAverages]         = useState<Record<number, DrinkAverage>>({});
-  const [userRatings,      setUserRatings]      = useState<Record<number, number>>({});
   const [showWeekOnly,     setShowWeekOnly]     = useState(true);
 
-  const [addModalVisible,    setAddModalVisible]    = useState(false);
-  const [selectedDrink,      setSelectedDrink]      = useState<Drink | null>(null);
-  const [loadingDrinks,      setLoadingDrinks]      = useState(false);
-  const [drinksError,        setDrinksError]        = useState<string | null>(null);
+  // Add drink modal
+  const [addModalVisible,  setAddModalVisible]  = useState(false);
+  const [selectedDrink,    setSelectedDrink]    = useState<Drink | null>(null);
+  const [loadingDrinks,    setLoadingDrinks]    = useState(false);
+  const [drinksError,      setDrinksError]      = useState<string | null>(null);
 
+  // Context modal (for manual logs — mood, time, weather)
+  const [contextModalVisible, setContextModalVisible] = useState(false);
+  const [drinkToLog,          setDrinkToLog]          = useState<Drink | null>(null);
+  const [pendingMood,         setPendingMood]         = useState<string>('');
+  const [pendingTime,         setPendingTime]         = useState<string>('');
+  const [pendingWeather,      setPendingWeather]      = useState<string>('');
+
+  // Rating modal
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [drinkToRate,        setDrinkToRate]        = useState<LoggedDrink | null>(null);
   const [pendingRating,      setPendingRating]      = useState(0);
   const [savingRating,       setSavingRating]       = useState(false);
 
-  // ─── LOAD ──────────────────────────────────────────────────────────────────
+  // ─── LOAD ────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    loadLoggedDrinks();
-    fetchAverages();
-    fetchUserRatings();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      loadLoggedDrinks();
+      fetchAverages();
+    }, [user])
+  );
 
   useEffect(() => {
     if (addModalVisible && allDrinks.length === 0) fetchDrinks();
@@ -125,7 +187,7 @@ export default function LogScreen() {
     );
   }, [selectedCategory, allDrinks]);
 
-  // ─── API ───────────────────────────────────────────────────────────────────
+  // ─── API ─────────────────────────────────────────────────────────────────
 
   const fetchDrinks = async () => {
     setLoadingDrinks(true); setDrinksError(null);
@@ -150,37 +212,37 @@ export default function LogScreen() {
     } catch {}
   };
 
-  const fetchUserRatings = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ratings/${user.uid}`);
-      if (!res.ok) return;
-      const data: { drink_id: number; star_rating: number }[] = await res.json();
-      const map: Record<number, number> = {};
-      data.forEach((r) => { map[r.drink_id] = r.star_rating; });
-      setUserRatings(map);
-      setLoggedDrinks((prev) => prev.map((d) => ({ ...d, user_rating: map[d.drink_id] ?? d.user_rating })));
-    } catch {}
-  };
-
-  const submitRating = async (drinkId: number, rating: number) => {
+  // Submit rating — now also saves mood/time/weather from the log entry
+  const submitRating = async (logEntry: LoggedDrink, rating: number) => {
     if (!user) return;
     setSavingRating(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/ratings`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.uid, drink_id: drinkId, star_rating: rating }),
+        body: JSON.stringify({
+          user_id:     user.uid,
+          drink_id:    logEntry.drink_id,
+          log_id:      logEntry.log_id ?? null,
+          star_rating: rating,
+          // Pass the context that was stored on the log entry — fills the
+          // mood/time_of_day/weather columns in the ratings table
+          mood:        logEntry.mood        ?? null,
+          time_of_day: logEntry.time_of_day ?? null,
+          weather:     logEntry.weather     ?? null,
+        }),
       });
       if (!res.ok) throw new Error();
-      const updated = loggedDrinks.map((d) => d.drink_id === drinkId ? { ...d, user_rating: rating } : d);
-      setLoggedDrinks(updated); saveLoggedDrinks(updated);
-      setUserRatings((prev) => ({ ...prev, [drinkId]: rating }));
+      const updated = loggedDrinks.map((d) =>
+        d.logged_at === logEntry.logged_at ? { ...d, user_rating: rating } : d
+      );
+      setLoggedDrinks(updated);
+      saveLoggedDrinks(updated);
       fetchAverages();
     } catch { Alert.alert('Error', 'Could not save rating. Please try again.'); }
     finally  { setSavingRating(false); }
   };
 
-  // ─── STORAGE ───────────────────────────────────────────────────────────────
+  // ─── STORAGE ─────────────────────────────────────────────────────────────
 
   const loadLoggedDrinks = async () => {
     if (!user) return;
@@ -200,28 +262,83 @@ export default function LogScreen() {
     } catch (e) { console.error(e); }
   };
 
-  // ─── HANDLERS ──────────────────────────────────────────────────────────────
+  // ─── HANDLERS ────────────────────────────────────────────────────────────
 
-  const handleAddDrink = async (drink: Drink) => {
-    const loggedDrink: LoggedDrink = { ...drink, logged_at: new Date().toISOString(), user_rating: userRatings[drink.drink_id] };
+  // Step 1: user picks a drink → open context modal to capture mood/time/weather
+  const handleDrinkSelected = (drink: Drink) => {
+    setDrinkToLog(drink);
+    setPendingMood('');
+    setPendingTime('');
+    setPendingWeather('');
+    setAddModalVisible(false);
+    setSelectedDrink(null);
+    setSelectedCategory('All');
+    setContextModalVisible(true);
+  };
+
+  // Step 2: user confirms context → save log with context
+  const handleConfirmLog = async () => {
+    if (!drinkToLog) return;
+    setContextModalVisible(false);
+
+    const ctx: LogContext = {
+      mood:        pendingMood    || undefined,
+      time_of_day: pendingTime   || undefined,
+      weather:     pendingWeather || undefined,
+    };
+
+    await doAddDrink(drinkToLog, ctx, false);
+    setDrinkToLog(null);
+  };
+
+  // Core function to add a drink to log — used both by manual log and by
+  // the home screen / personalised flow (which pass context from questionnaire)
+  const doAddDrink = async (drink: Drink, ctx: LogContext, isRecommended: boolean) => {
+    if (!user) return;
+
+    const loggedDrink: LoggedDrink = {
+      ...drink,
+      logged_at:      new Date().toISOString(),
+      user_rating:    undefined,
+      is_recommended: isRecommended,
+      mood:           ctx.mood,
+      time_of_day:    ctx.time_of_day,
+      weather:        ctx.weather,
+    };
+
     const updated = [loggedDrink, ...loggedDrinks];
-    setLoggedDrinks(updated); saveLoggedDrinks(updated);
-    setAddModalVisible(false); setSelectedDrink(null); setSelectedCategory('All');
-    if (user) {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/logs`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: user.uid, drink_id: drink.drink_id, caffeine_amount: drink.caffeine_mg }),
-        });
-        if (res.ok) {
-          const saved = await res.json();
-          const withId = updated.map((d) =>
-            d.logged_at === loggedDrink.logged_at && d.drink_id === drink.drink_id ? { ...d, log_id: saved.log_id } : d
-          );
-          setLoggedDrinks(withId); saveLoggedDrinks(withId);
-        }
-      } catch (e) { console.error('Failed to save log to DB:', e); }
-    }
+    setLoggedDrinks(updated);
+    saveLoggedDrinks(updated);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/logs`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:        user.uid,
+          drink_id:       drink.drink_id,
+          caffeine_amount: drink.caffeine_mg,
+          mood:           ctx.mood           || null,
+          time_of_day:    ctx.time_of_day    || null,
+          weather:        ctx.weather        || null,
+          is_recommended: isRecommended,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        const withId = updated.map((d) =>
+          d.logged_at === loggedDrink.logged_at && d.drink_id === drink.drink_id
+            ? { ...d, log_id: saved.log_id }
+            : d
+        );
+        setLoggedDrinks(withId);
+        saveLoggedDrinks(withId);
+      }
+    } catch (e) { console.error('Failed to save log to DB:', e); }
+  };
+
+  const handleAddDrink = (drink: Drink) => {
+    // Legacy entry point kept for any direct calls — routes through context modal
+    handleDrinkSelected(drink);
   };
 
   const handleDeleteDrink = (drink: LoggedDrink) => {
@@ -243,20 +360,20 @@ export default function LogScreen() {
 
   const handleConfirmRating = async () => {
     if (!drinkToRate || pendingRating === 0) { Alert.alert('Select a rating', 'Please tap a star to give a rating.'); return; }
-    await submitRating(drinkToRate.drink_id, pendingRating);
+    await submitRating(drinkToRate, pendingRating);
     setRatingModalVisible(false); setDrinkToRate(null);
   };
 
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
 
-  // ─── SECTION DATA ──────────────────────────────────────────────────────────
+  // ─── SECTION DATA ─────────────────────────────────────────────────────────
 
   const allSections  = groupByDay(loggedDrinks);
   const weekSections = getCurrentWeekSections(allSections);
   const sections     = showWeekOnly ? weekSections : allSections;
   const totalToday   = allSections.find((s) => s.title === 'Today')?.totalCaffeine ?? 0;
 
-  // ─── RENDER: DRINK CARD ────────────────────────────────────────────────────
+  // ─── RENDER: DRINK CARD ───────────────────────────────────────────────────
 
   const renderDrinkCard = ({ item }: { item: LoggedDrink }) => {
     const avg = averages[item.drink_id];
@@ -264,8 +381,21 @@ export default function LogScreen() {
       <View style={s.drinkCard}>
         <View style={s.cardTop}>
           <View style={{ flex: 1 }}>
+            {item.is_recommended && (
+              <View style={s.recTag}>
+                <Text style={s.recTagText}>✨ Recommended</Text>
+              </View>
+            )}
             <Text style={s.cardName}>{item.name}</Text>
             <Text style={s.cardMeta}>{item.category} · {item.caffeine_mg}mg</Text>
+            {/* Context pills on the card */}
+            {(item.mood || item.time_of_day || item.weather) && (
+              <View style={s.cardContextRow}>
+                {item.mood        && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{item.mood.split(' ')[0]}</Text></View>}
+                {item.time_of_day && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{item.time_of_day}</Text></View>}
+                {item.weather     && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{item.weather}</Text></View>}
+              </View>
+            )}
           </View>
           <View style={s.cardRight}>
             <Text style={s.cardTime}>{formatTime(item.logged_at)}</Text>
@@ -294,7 +424,7 @@ export default function LogScreen() {
     );
   };
 
-  // ─── RENDER: SECTION HEADER ────────────────────────────────────────────────
+  // ─── RENDER: SECTION HEADER ───────────────────────────────────────────────
 
   const renderSectionHeader = ({ section }: { section: DaySection }) => (
     <View style={s.sectionHeader}>
@@ -305,7 +435,7 @@ export default function LogScreen() {
     </View>
   );
 
-  // ─── RENDER: DRINK PICKER OPTION ──────────────────────────────────────────
+  // ─── RENDER: DRINK PICKER OPTION ─────────────────────────────────────────
 
   const renderDrinkOption = ({ item }: { item: Drink }) => {
     const avg = averages[item.drink_id];
@@ -323,7 +453,7 @@ export default function LogScreen() {
     );
   };
 
-  // ─── MAIN RENDER ──────────────────────────────────────────────────────────
+  // ─── MAIN RENDER ─────────────────────────────────────────────────────────
 
   return (
     <View style={s.container}>
@@ -366,14 +496,11 @@ export default function LogScreen() {
         />
       )}
 
-      {/* ── ADD DRINK MODAL ───────────────────────────────────────────────── */}
-      <Modal
-        animationType="slide" transparent visible={addModalVisible}
-        onRequestClose={() => { setAddModalVisible(false); setSelectedDrink(null); }}
-      >
+      {/* ── ADD DRINK MODAL ─────────────────────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={addModalVisible}
+        onRequestClose={() => { setAddModalVisible(false); setSelectedDrink(null); }}>
         <View style={s.modalOverlay}>
           <View style={s.modalContent}>
-
             <View style={s.modalHeader}>
               <Text style={s.modalTitle} numberOfLines={1}>
                 {selectedDrink ? selectedDrink.name : 'Select a Drink'}
@@ -411,20 +538,17 @@ export default function LogScreen() {
                 <TouchableOpacity style={s.backBtn} onPress={() => setSelectedDrink(null)}>
                   <Text style={s.backBtnText}>Back</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.confirmBtn} onPress={() => handleAddDrink(selectedDrink)} activeOpacity={0.8}>
+                <TouchableOpacity style={s.confirmBtn} onPress={() => handleDrinkSelected(selectedDrink)} activeOpacity={0.8}>
                   <Text style={s.confirmBtnText}>Add to Log</Text>
                 </TouchableOpacity>
               </ScrollView>
-
             ) : loadingDrinks ? (
               <View style={s.centred}><ActivityIndicator size="large" color={C.primary} /><Text style={s.loadingText}>Loading drinks...</Text></View>
-
             ) : drinksError ? (
               <View style={s.centred}>
                 <Text style={s.errorText}>{drinksError}</Text>
                 <TouchableOpacity style={s.retryBtn} onPress={fetchDrinks}><Text style={s.retryText}>Retry</Text></TouchableOpacity>
               </View>
-
             ) : (
               <FlatList
                 data={filteredDrinks}
@@ -433,18 +557,11 @@ export default function LogScreen() {
                 contentContainerStyle={{ paddingBottom: 20 }}
                 stickyHeaderIndices={[0]}
                 ListHeaderComponent={
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={s.chipScroll}
-                    contentContainerStyle={s.chipScrollContent}
-                  >
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    style={s.chipScroll} contentContainerStyle={s.chipScrollContent}>
                     {categories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[s.chip, selectedCategory === cat && s.chipActive]}
-                        onPress={() => setSelectedCategory(cat)}
-                      >
+                      <TouchableOpacity key={cat} style={[s.chip, selectedCategory === cat && s.chipActive]}
+                        onPress={() => setSelectedCategory(cat)}>
                         <Text style={[s.chipText, selectedCategory === cat && s.chipTextActive]}>{cat}</Text>
                       </TouchableOpacity>
                     ))}
@@ -456,8 +573,43 @@ export default function LogScreen() {
         </View>
       </Modal>
 
+      {/* ── CONTEXT MODAL (mood / time / weather before logging) ─────────── */}
+      <Modal animationType="slide" transparent visible={contextModalVisible}
+        onRequestClose={() => setContextModalVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalContent, { maxHeight: '75%' }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Before you log…</Text>
+              <TouchableOpacity onPress={() => { setContextModalVisible(false); handleConfirmLog(); }}>
+                <Text style={[s.backBtnText, { fontSize: 14 }]}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 20 }}>
+              <Text style={s.ctxSectionLabel}>How are you feeling?</Text>
+              <ContextPillRow options={MOOD_OPTIONS} selected={pendingMood} onSelect={setPendingMood} s={s} />
+
+              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Time of day</Text>
+              <ContextPillRow options={TIME_OPTIONS} selected={pendingTime} onSelect={setPendingTime} s={s} />
+
+              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Weather</Text>
+              <ContextPillRow options={WEATHER_OPTIONS} selected={pendingWeather} onSelect={setPendingWeather} s={s} />
+
+              <Text style={s.ctxHint}>
+                This helps improve recommendations for you and the community. All fields are optional.
+              </Text>
+
+              <TouchableOpacity style={[s.confirmBtn, { marginTop: 8 }]} onPress={handleConfirmLog} activeOpacity={0.8}>
+                <Text style={s.confirmBtnText}>Log {drinkToLog?.name}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── RATING MODAL ──────────────────────────────────────────────────── */}
-      <Modal animationType="fade" transparent visible={ratingModalVisible} onRequestClose={() => setRatingModalVisible(false)}>
+      <Modal animationType="fade" transparent visible={ratingModalVisible}
+        onRequestClose={() => setRatingModalVisible(false)}>
         <View style={s.ratingOverlay}>
           <View style={s.ratingBox}>
             <Text style={s.ratingTitle}>Rate your drink</Text>
@@ -467,6 +619,15 @@ export default function LogScreen() {
               <Text style={s.ratingLabel}>
                 {['','Poor','Fair','Good','Great','Excellent'][pendingRating]}
               </Text>
+            )}
+            {/* Show context that will be saved with this rating */}
+            {(drinkToRate?.mood || drinkToRate?.time_of_day || drinkToRate?.weather) && (
+              <View style={s.ratingCtxRow}>
+                <Text style={s.ratingCtxLabel}>Saving with context: </Text>
+                {drinkToRate.mood        && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{drinkToRate.mood.split(' ')[0]}</Text></View>}
+                {drinkToRate.time_of_day && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{drinkToRate.time_of_day}</Text></View>}
+                {drinkToRate.weather     && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{drinkToRate.weather}</Text></View>}
+              </View>
             )}
             <View style={s.ratingBtns}>
               <TouchableOpacity style={s.cancelBtn} onPress={() => setRatingModalVisible(false)}>
@@ -522,6 +683,14 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   rateBtnText:     { fontSize: 12, color: C.primary, fontWeight: '600' },
   rateBtnTextDone: { color: '#fff' },
 
+  recTag:     { alignSelf: 'flex-start', backgroundColor: C.primaryMuted, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginBottom: 5, borderWidth: 1, borderColor: C.border },
+  recTagText: { fontSize: 11, color: C.primary, fontWeight: '700' },
+
+  // Context badges on card
+  cardContextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
+  ctxBadge:       { backgroundColor: C.background, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: C.border },
+  ctxBadgeText:   { fontSize: 10, color: C.textSecondary, fontWeight: '500' },
+
   listContent: { paddingBottom: 30 },
   emptyState:  { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyTitle:  { fontSize: 16, fontWeight: '600', color: C.textSecondary, marginBottom: 6 },
@@ -560,11 +729,23 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   retryBtn:    { backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
   retryText:   { color: '#fff', fontWeight: '600' },
 
+  // Context modal styles
+  ctxSectionLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pillRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  pill:            { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background },
+  pillSelected:    { borderColor: C.primary, backgroundColor: C.primaryMuted },
+  pillIcon:        { fontSize: 14 },
+  pillText:        { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
+  pillTextSelected:{ color: C.primary, fontWeight: '700' },
+  ctxHint:         { fontSize: 12, color: C.textMuted, textAlign: 'center', marginVertical: 16, lineHeight: 18 },
+
   ratingOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: 24 },
   ratingBox:       { backgroundColor: C.surface, borderRadius: 20, padding: 28, width: '100%', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.border },
   ratingTitle:     { fontSize: 18, fontWeight: '700', color: C.text },
   ratingDrinkName: { fontSize: 14, color: C.textMuted, marginBottom: 8 },
   ratingLabel:     { fontSize: 15, fontWeight: '600', color: C.primary },
+  ratingCtxRow:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: -4 },
+  ratingCtxLabel:  { fontSize: 11, color: C.textMuted },
   ratingBtns:      { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
   cancelBtn:       { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
   cancelBtnText:   { color: C.textSecondary, fontWeight: '600' },
