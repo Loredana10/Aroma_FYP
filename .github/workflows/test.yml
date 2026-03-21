@@ -1,0 +1,73 @@
+# .github/workflows/test.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Aroma — Automated Test Pipeline
+#
+# Triggers:
+#   - Every push to main or develop
+#   - Every pull request targeting main
+#
+# Jobs:
+#   1. python-unit-tests   — runs test_unit_recommender.py (no DB needed)
+#   2. node-unit-tests     — runs Jest API unit tests (mocked DB)
+#
+# Integration tests are NOT run in CI because they require a live PostgreSQL
+# database and both servers running. Run test_integration.py manually before
+# an EAS production build (see README instructions below).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Aroma Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  # ── Job 1: Python unit tests ────────────────────────────────────────────
+  python-unit-tests:
+    name: Python recommender unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: |
+          pip install numpy pandas scikit-learn scipy flask psycopg2-binary
+
+      - name: Run Python unit tests
+        working-directory: backend
+        run: python test_unit_recommender.py -v
+
+  # ── Job 2: Node.js API unit tests ───────────────────────────────────────
+  node-unit-tests:
+    name: Node.js API unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Node dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Run Jest unit tests
+        working-directory: backend
+        run: npx jest test_unit_api.js --verbose --forceExit
