@@ -1,20 +1,3 @@
-# .github/workflows/test.yml
-# ─────────────────────────────────────────────────────────────────────────────
-# Aroma — Automated Test Pipeline
-#
-# Triggers:
-#   - Every push to main or develop
-#   - Every pull request targeting main
-#
-# Jobs:
-#   1. python-unit-tests   — runs test_unit_recommender.py (no DB needed)
-#   2. node-unit-tests     — runs Jest API unit tests (mocked DB)
-#
-# Integration tests are NOT run in CI because they require a live PostgreSQL
-# database and both servers running. Run test_integration.py manually before
-# an EAS production build (see README instructions below).
-# ─────────────────────────────────────────────────────────────────────────────
-
 name: Aroma Test Suite
 
 on:
@@ -25,7 +8,6 @@ on:
 
 jobs:
 
-  # ── Job 1: Python unit tests ────────────────────────────────────────────
   python-unit-tests:
     name: Python recommender unit tests
     runs-on: ubuntu-latest
@@ -42,13 +24,12 @@ jobs:
       - name: Install Python dependencies
         working-directory: backend
         run: |
-          pip install numpy pandas scikit-learn scipy flask psycopg2-binary
+          pip install "numpy==1.26.4" "pandas==2.2.2" "scikit-learn==1.4.2" "scipy==1.13.0" flask psycopg2-binary
 
       - name: Run Python unit tests
         working-directory: backend
         run: python test_unit_recommender.py -v
 
-  # ── Job 2: Node.js API unit tests ───────────────────────────────────────
   node-unit-tests:
     name: Node.js API unit tests
     runs-on: ubuntu-latest
@@ -66,8 +47,8 @@ jobs:
 
       - name: Install Node dependencies
         working-directory: backend
-        run: npm install
+        run: npm ci
 
       - name: Run Jest unit tests
         working-directory: backend
-        run: npx jest test_unit_api.js --verbose --forceExit
+        run: npx jest --verbose --forceExit
