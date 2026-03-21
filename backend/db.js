@@ -1,11 +1,8 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  host:     'localhost',
-  port:     5434,          // your PostgreSQL port
-  database: 'aroma_db',       // your database name
-  user:     'postgres',    // your username
-  password: '12345' // your password
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 module.exports = pool;
