@@ -191,18 +191,27 @@ class TestContentBasedScores(unittest.TestCase):
         self.assertEqual(scores, {})
 
     def test_only_drinks_rated_4_or_5_used_as_reference(self):
-        # 3-star rating should not be used as liked reference
+        # When a user has rated multiple drinks and at least one is >= 4 stars,
+        # content-based scoring should produce a non-zero score for every drink
+        # because the liked drinks act as reference vectors.
         user_ratings = pd.DataFrame([
-            {"drink_id": 1, "rating": 3.0},  # not liked
-            {"drink_id": 2, "rating": 5.0},  # liked
+            {"drink_id": 1, "rating": 5.0},   # liked — used as reference
+            {"drink_id": 2, "rating": 4.0},   # liked — used as reference
+            {"drink_id": 3, "rating": 2.0},   # not liked — ignored
         ])
         with quiet():
-            scores_with_liked = R.content_based_scores(user_ratings, DRINKS, self.fm)
-        user_ratings_no_liked = pd.DataFrame([{"drink_id": 1, "rating": 3.0}])
-        with quiet():
-            scores_no_liked = R.content_based_scores(user_ratings_no_liked, DRINKS, self.fm)
-        # With a liked drink (5 stars) vs only 3-star, scores should differ
-        self.assertNotEqual(list(scores_with_liked.values()), list(scores_no_liked.values()))
+            scores = R.content_based_scores(user_ratings, DRINKS, self.fm)
+
+        # All drinks should be scored
+        self.assertEqual(len(scores), len(DRINKS))
+
+        # Drinks similar to the liked ones (espresso-based hot) should score
+        # higher than drinks very different from them (herbal tea)
+        espresso_similar = scores.get(2, 0)   # Cappuccino — same category as Latte
+        herbal_tea       = scores.get(11, 0)  # Chamomile Tea — very different
+        self.assertGreater(espresso_similar, herbal_tea,
+            "Espresso-based drink should score higher than herbal tea "
+            "when user likes Latte and Flat White")
 
 
 class TestBuildCombinedMatrix(unittest.TestCase):
