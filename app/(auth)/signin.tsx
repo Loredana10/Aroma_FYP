@@ -1,16 +1,21 @@
-import { Link, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import {
-  View, TextInput, Text, Alert, StyleSheet,
-  TouchableOpacity, Image, KeyboardAvoidingView,
-  Platform, ScrollView,
-} from 'react-native';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/firebaseConfig';
 import { syncUserToDatabase } from '@/constants/api';
 import { Colors } from '@/constants/theme';
+import { auth, db } from '@/firebaseConfig';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Link, useRouter } from 'expo-router';
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useState } from 'react';
+import {
+  Alert,
+  Image, KeyboardAvoidingView,
+  Platform, ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 let GoogleSignin: any;
 let isGoogleAvailable = false;
@@ -91,7 +96,7 @@ export default function SignIn() {
         {/* Brand mark */}
         <View style={s.brandBlock}>
           <Image
-            source={require('@/assets/images/app_logo.png')}
+            source={require('@/assets/images/app_logo2.jpg')}
             style={s.logoMark}
             resizeMode="contain"
           />

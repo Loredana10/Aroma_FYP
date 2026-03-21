@@ -10,6 +10,13 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Switch } from 'react-native';
+import {
+  scheduleDailyReminder,
+  cancelDailyReminder,
+  scheduleWeeklyRecap,
+  cancelWeeklyRecap,
+} from '@/services/notifications';
 import { Colors } from '@/constants/theme';
 import { MASCOTS, getMascotById } from '@/constants/mascots';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -96,6 +103,8 @@ export default function ProfileScreen() {
   const [caffeineLimitInput,   setCaffeineLimitInput]   = useState('');
   const [showCaffeineGuide,    setShowCaffeineGuide]    = useState(false);
   const [showAgeGuide,         setShowAgeGuide]         = useState(false);
+  const [notifDailyEnabled,    setNotifDailyEnabled]    = useState(true);
+  const [notifWeeklyEnabled,   setNotifWeeklyEnabled]   = useState(true);
   const [expandedAgeRange,     setExpandedAgeRange]     = useState<string | null>(null);
   const [mascotId,             setMascotId]             = useState<string | null>(null);
   const [showMascotPicker,     setShowMascotPicker]     = useState(false);
@@ -123,7 +132,14 @@ export default function ProfileScreen() {
         setCaffeineLimitInput(limit);
       }
     } catch { Alert.alert('Error', 'Failed to load profile'); }
-    finally   { setLoading(false); }
+    finally   {
+      // Load notification preferences from AsyncStorage
+      const dailyPref  = await AsyncStorage.getItem('notif_daily_enabled');
+      const weeklyPref = await AsyncStorage.getItem('notif_weekly_enabled');
+      setNotifDailyEnabled(dailyPref  !== 'false');
+      setNotifWeeklyEnabled(weeklyPref !== 'false');
+      setLoading(false);
+    }
   };
 
   const toggleDietary = (option: string) => {
@@ -466,6 +482,49 @@ export default function ProfileScreen() {
         )}
       </View>
 
+      {/* Notifications */}
+      <View style={s.section}>
+        <Text style={s.sectionTitle}>Notifications</Text>
+        <Text style={s.sectionDescription}>
+          Choose which reminders you would like to receive.
+        </Text>
+        <View style={s.notifRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.notifLabel}>Daily morning reminder</Text>
+            <Text style={s.notifSub}>Every day at 8:00am</Text>
+          </View>
+          <Switch
+            value={notifDailyEnabled}
+            onValueChange={async (val) => {
+              setNotifDailyEnabled(val);
+              await AsyncStorage.setItem('notif_daily_enabled', String(val));
+              if (val) { scheduleDailyReminder(); } else { cancelDailyReminder(); }
+            }}
+            trackColor={{ false: C.border, true: C.primary }}
+            thumbColor={'#fff'}
+          />
+        </View>
+        <View style={[s.notifRow, { borderBottomWidth: 0 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.notifLabel}>Weekly recap</Text>
+            <Text style={s.notifSub}>Every Sunday at 7:00pm</Text>
+          </View>
+          <Switch
+            value={notifWeeklyEnabled}
+            onValueChange={async (val) => {
+              setNotifWeeklyEnabled(val);
+              await AsyncStorage.setItem('notif_weekly_enabled', String(val));
+              if (val) { scheduleWeeklyRecap(); } else { cancelWeeklyRecap(); }
+            }}
+            trackColor={{ false: C.border, true: C.primary }}
+            thumbColor={'#fff'}
+          />
+        </View>
+        <Text style={s.notifHint}>
+          Drink logging reminders and caffeine limit alerts are always on.
+        </Text>
+      </View>
+
       {/* Sign out */}
       <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
         <Text style={s.logoutBtnText}>Sign out</Text>
@@ -596,6 +655,10 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   ageRangeExText:    { fontSize: 12, color: C.textSecondary, flex: 1 },
 
   logoutBtn:     { backgroundColor: C.surface, borderWidth: 1, borderColor: '#8b3a3a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  notifRow:      { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
+  notifLabel:    { fontSize: 14, fontWeight: '500', color: C.text },
+  notifSub:      { fontSize: 12, color: C.textMuted, marginTop: 2 },
+  notifHint:     { fontSize: 12, color: C.textMuted, marginTop: 12, lineHeight: 17 },
   logoutBtnText: { color: '#8b3a3a', fontSize: 15, fontWeight: '600' },
 
   // Mascot picker modal

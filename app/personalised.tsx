@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth_context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { schedulePendingRecNotification } from '@/services/notifications';
 import { API_BASE_URL } from '@/constants/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -318,6 +319,9 @@ export default function PersonalisedScreen() {
         JSON.stringify(pending)
       );
       setSavedId(rec.drink_id);
+      // Schedule the reminder once here — this is the only place it fires
+      // loadPendingRec in index.tsx does NOT reschedule to avoid duplicates
+      schedulePendingRecNotification(rec.name);
     } catch (err) {
       console.error('Save drink error:', err);
       Alert.alert('Error', 'Could not save this drink. Please try again.');

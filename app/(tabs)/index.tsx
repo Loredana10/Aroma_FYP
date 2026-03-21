@@ -11,6 +11,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { API_BASE_URL } from '@/constants/api';
+import {
+  schedulePendingRecNotification,
+  cancelPendingRecNotification,
+} from '@/services/notifications';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -179,7 +183,10 @@ export default function Index() {
   const loadPendingRec = async () => {
     try {
       const raw = await AsyncStorage.getItem(`pending_recommendation_${user!.uid}`);
-      setPendingRec(raw ? JSON.parse(raw) : null);
+      const rec = raw ? JSON.parse(raw) : null;
+      setPendingRec(rec);
+      // Notification is scheduled once in personalised.tsx when the rec is
+      // saved — we never reschedule here to avoid duplicate notifications
     } catch {}
   };
 
@@ -240,6 +247,8 @@ export default function Index() {
 
       await AsyncStorage.removeItem(`pending_recommendation_${user.uid}`);
       setPendingRec(null);
+      // Cancel the reminder — user has now logged the recommended drink
+      cancelPendingRecNotification();
       loadRecentDrinks();
       Alert.alert('Logged!', `${pendingRec.name} has been added to your log.`);
     } catch {
@@ -400,7 +409,7 @@ export default function Index() {
           <Text style={s.subtitle}>What are you having today?</Text>
         </View>
         <Image
-          source={require('@/assets/images/app_logo.png')}
+          source={require('@/assets/images/app_logo2.jpg')}
           style={s.logoMark}
           resizeMode="contain"
         />
@@ -497,7 +506,7 @@ export default function Index() {
 
       {/* ── RECENT DRINKS ──────────────────────────────────────────── */}
       <View style={s.sectionHeader}>
-        <Text style={s.sectionTitle}>Recently logged</Text>
+        <Text style={s.sectionTitle}>Recently logged recommendations</Text>
         {recentDrinks.length > 0 && (
           <TouchableOpacity onPress={() => router.push('/log')}>
             <Text style={s.sectionLink}>See all</Text>

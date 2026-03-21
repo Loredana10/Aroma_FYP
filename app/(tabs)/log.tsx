@@ -1,4 +1,9 @@
 import { API_BASE_URL } from '@/constants/api';
+import {
+  scheduleUnratedLogNotification,
+  cancelUnratedLogNotification,
+  scheduleCaffeineLimitNotification,
+} from '@/services/notifications';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth_context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -43,20 +48,20 @@ interface DaySection {
 // ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
 
 const MOOD_OPTIONS = [
-  { value: 'Tired and need a boost',         label: 'Need a boost'},
-  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink'},
-  { value: 'Relaxed and winding down',       label: 'Winding down'},
+  { value: 'Tired and need a boost',         label: 'Need a boost',       icon: '⚡' },
+  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink', icon: '☕' },
+  { value: 'Relaxed and winding down',       label: 'Winding down',       icon: '🌙' },
 ];
 
 const TIME_OPTIONS = [
-  { value: 'Morning',   label: 'Morning'},
-  { value: 'Afternoon', label: 'Afternoon'},
-  { value: 'Evening',   label: 'Evening'},
+  { value: 'Morning',   label: 'Morning',   icon: '🌅' },
+  { value: 'Afternoon', label: 'Afternoon', icon: '☀️' },
+  { value: 'Evening',   label: 'Evening',   icon: '🌆' },
 ];
 
 const WEATHER_OPTIONS = [
-  { value: 'Hot/Warm', label: 'Warm'},
-  { value: 'Cold',     label: 'Cold'},
+  { value: 'Hot/Warm', label: 'Warm', icon: '🌤️' },
+  { value: 'Cold',     label: 'Cold', icon: '🌧️' },
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -112,7 +117,7 @@ const Stars = ({
 // ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
 
 function ContextPillRow({ options, selected, onSelect, s }: {
-  options: { value: string; label: string}[];
+  options: { value: string; label: string; icon: string }[];
   selected: string | undefined;
   onSelect: (v: string) => void;
   s: any;
@@ -126,6 +131,7 @@ function ContextPillRow({ options, selected, onSelect, s }: {
           onPress={() => onSelect(selected === o.value ? '' : o.value)}
           activeOpacity={0.8}
         >
+          <Text style={s.pillIcon}>{o.icon}</Text>
           <Text style={[s.pillText, selected === o.value && s.pillTextSelected]}>{o.label}</Text>
         </TouchableOpacity>
       ))}
@@ -148,6 +154,7 @@ export default function LogScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [averages,         setAverages]         = useState<Record<number, DrinkAverage>>({});
   const [showWeekOnly,     setShowWeekOnly]     = useState(true);
+  const [loadingLogs,      setLoadingLogs]      = useState(false);
 
   // Add drink modal
   const [addModalVisible,  setAddModalVisible]  = useState(false);
@@ -155,7 +162,7 @@ export default function LogScreen() {
   const [loadingDrinks,    setLoadingDrinks]    = useState(false);
   const [drinksError,      setDrinksError]      = useState<string | null>(null);
 
-  // Context modal (for manual logs — mood, time, weather)
+  // Context modal
   const [contextModalVisible, setContextModalVisible] = useState(false);
   const [drinkToLog,          setDrinkToLog]          = useState<Drink | null>(null);
   const [pendingMood,         setPendingMood]         = useState<string>('');
@@ -172,7 +179,7 @@ export default function LogScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      loadLoggedDrinks();
+      loadLogsAndRatings();
       fetchAverages();
     }, [user])
   );
@@ -212,7 +219,6 @@ export default function LogScreen() {
     } catch {}
   };
 
-  // Submit rating — now also saves mood/time/weather from the log entry
   const submitRating = async (logEntry: LoggedDrink, rating: number) => {
     if (!user) return;
     setSavingRating(true);
@@ -224,47 +230,134 @@ export default function LogScreen() {
           drink_id:    logEntry.drink_id,
           log_id:      logEntry.log_id ?? null,
           star_rating: rating,
-          // Pass the context that was stored on the log entry — fills the
-          // mood/time_of_day/weather columns in the ratings table
           mood:        logEntry.mood        ?? null,
           time_of_day: logEntry.time_of_day ?? null,
           weather:     logEntry.weather     ?? null,
         }),
       });
       if (!res.ok) throw new Error();
+      // Update only the specific log entry that was rated (matched by log_id)
       const updated = loggedDrinks.map((d) =>
-        d.logged_at === logEntry.logged_at ? { ...d, user_rating: rating } : d
+        d.log_id === logEntry.log_id ? { ...d, user_rating: rating } : d
       );
       setLoggedDrinks(updated);
-      saveLoggedDrinks(updated);
+      updateCaffeineCache(updated);
       fetchAverages();
+      // Re-count unrated drinks — cancels notification if all are now rated
+      updateUnratedNotification(updated);
     } catch { Alert.alert('Error', 'Could not save rating. Please try again.'); }
     finally  { setSavingRating(false); }
   };
 
-  // ─── STORAGE ─────────────────────────────────────────────────────────────
+  // ─── LOAD LOGS + RATINGS FROM DB ─────────────────────────────────────────
 
-  const loadLoggedDrinks = async () => {
+  /**
+   * Fetches logs AND the user's personal ratings from the DB in parallel,
+   * then merges ratings onto the matching log entries by drink_id.
+   * This ensures user_rating is always populated from PostgreSQL — not AsyncStorage —
+   * so data persists across devices and reinstalls.
+   */
+  const loadLogsAndRatings = async () => {
     if (!user) return;
+    setLoadingLogs(true);
     try {
-      const stored = await AsyncStorage.getItem(`logged_drinks_${user.uid}`);
-      if (stored) setLoggedDrinks(JSON.parse(stored));
-    } catch (e) { console.error(e); }
+      // Fetch logs and user ratings in parallel
+      const [logsRes, ratingsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/logs/${user.uid}`),
+        fetch(`${API_BASE_URL}/api/ratings/user/${user.uid}`),
+      ]);
+
+      // Build a log_id → star_rating lookup from the user's ratings
+      // Keyed by log_id so each log entry only gets the rating for THAT specific log,
+      // not any other log of the same drink
+      const ratingsMap: Record<number, number> = {};
+      if (ratingsRes.ok) {
+        const ratingsData = await ratingsRes.json();
+        ratingsData.forEach((r: any) => {
+          if (r.log_id && r.star_rating) {
+            ratingsMap[r.log_id] = r.star_rating;
+          }
+        });
+      }
+
+      if (!logsRes.ok) throw new Error('Failed to fetch logs');
+      const rows = await logsRes.json();
+
+      // Map DB rows → LoggedDrink, merging in the user's rating for each drink
+      const drinks: LoggedDrink[] = rows.map((row: any) => ({
+        drink_id:                   row.drink_id,
+        name:                       row.drink_name ?? row.name,
+        category:                   row.category,
+        type:                       row.type        ?? '',
+        base:                       row.base        ?? '',
+        caffeine_mg:                row.caffeine_amount ?? row.caffeine_mg ?? 0,
+        shots:                      row.shots       ?? 0,
+        dairy_free:                 row.dairy_free  ?? false,
+        vegan:                      row.vegan       ?? false,
+        gluten_free:                row.gluten_free ?? false,
+        milk_alternative_available: row.milk_alternative_available ?? false,
+        log_id:                     row.log_id,
+        logged_at:                  row.timestamp ?? row.logged_at,
+        // Only apply a rating if one was saved for THIS specific log entry (matched by log_id)
+        user_rating:                row.user_rating ?? ratingsMap[row.log_id] ?? undefined,
+        is_recommended:             row.is_recommended ?? false,
+        mood:                       row.mood        ?? undefined,
+        time_of_day:                row.time_of_day ?? undefined,
+        weather:                    row.weather     ?? undefined,
+      }));
+
+      setLoggedDrinks(drinks);
+      updateCaffeineCache(drinks);
+    } catch (e) {
+      console.error('Error loading logs from DB:', e);
+      // Fallback to AsyncStorage cache if server is unreachable
+      try {
+        const stored = await AsyncStorage.getItem(`logged_drinks_${user.uid}`);
+        if (stored) setLoggedDrinks(JSON.parse(stored));
+      } catch {}
+    } finally {
+      setLoadingLogs(false);
+    }
   };
 
-  const saveLoggedDrinks = async (drinks: LoggedDrink[]) => {
+  /**
+   * Counts unrated drinks across ALL log entries (unique by drink_id),
+   * then schedules or cancels the unrated notification accordingly.
+   * Called after every log add, rating save, or delete.
+   */
+  const updateUnratedNotification = async (drinks: LoggedDrink[]) => {
+    // Count unique drink_ids that have no rating
+    const unratedDrinkIds = new Set(
+      drinks
+        .filter((d) => d.user_rating == null)
+        .map((d) => d.drink_id)
+    );
+    const count = unratedDrinkIds.size;
+
+    if (count === 0) {
+      cancelUnratedLogNotification();
+    } else {
+      scheduleUnratedLogNotification(count);
+    }
+  };
+  const updateCaffeineCache = async (drinks: LoggedDrink[]) => {
     if (!user) return;
     try {
-      await AsyncStorage.setItem(`logged_drinks_${user.uid}`, JSON.stringify(drinks));
       const todayKey = toDateKey(new Date().toISOString());
-      const todayMg  = drinks.filter((d) => toDateKey(d.logged_at) === todayKey).reduce((s, d) => s + d.caffeine_mg, 0);
+      const todayMg  = drinks
+        .filter((d) => toDateKey(d.logged_at) === todayKey)
+        .reduce((s, d) => s + d.caffeine_mg, 0);
       await AsyncStorage.setItem(`caffeine_today_${user.uid}`, JSON.stringify({ date: todayKey, mg: todayMg }));
+      const limitRaw = await AsyncStorage.getItem(`caffeine_limit_${user.uid}`);
+      const limit    = limitRaw ? parseInt(limitRaw) : null;
+      if (limit && todayMg > limit) {
+        scheduleCaffeineLimitNotification(limit, todayMg);
+      }
     } catch (e) { console.error(e); }
   };
 
   // ─── HANDLERS ────────────────────────────────────────────────────────────
 
-  // Step 1: user picks a drink → open context modal to capture mood/time/weather
   const handleDrinkSelected = (drink: Drink) => {
     setDrinkToLog(drink);
     setPendingMood('');
@@ -276,27 +369,23 @@ export default function LogScreen() {
     setContextModalVisible(true);
   };
 
-  // Step 2: user confirms context → save log with context
   const handleConfirmLog = async () => {
     if (!drinkToLog) return;
     setContextModalVisible(false);
-
     const ctx: LogContext = {
       mood:        pendingMood    || undefined,
       time_of_day: pendingTime   || undefined,
       weather:     pendingWeather || undefined,
     };
-
     await doAddDrink(drinkToLog, ctx, false);
     setDrinkToLog(null);
   };
 
-  // Core function to add a drink to log — used both by manual log and by
-  // the home screen / personalised flow (which pass context from questionnaire)
   const doAddDrink = async (drink: Drink, ctx: LogContext, isRecommended: boolean) => {
     if (!user) return;
 
-    const loggedDrink: LoggedDrink = {
+    // New log entries always start unrated — rating is per-log, not per-drink
+    const optimisticEntry: LoggedDrink = {
       ...drink,
       logged_at:      new Date().toISOString(),
       user_rating:    undefined,
@@ -306,38 +395,39 @@ export default function LogScreen() {
       weather:        ctx.weather,
     };
 
-    const updated = [loggedDrink, ...loggedDrinks];
-    setLoggedDrinks(updated);
-    saveLoggedDrinks(updated);
+    const optimistic = [optimisticEntry, ...loggedDrinks];
+    setLoggedDrinks(optimistic);
+    updateCaffeineCache(optimistic);
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/logs`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id:        user.uid,
-          drink_id:       drink.drink_id,
+          user_id:         user.uid,
+          drink_id:        drink.drink_id,
           caffeine_amount: drink.caffeine_mg,
-          mood:           ctx.mood           || null,
-          time_of_day:    ctx.time_of_day    || null,
-          weather:        ctx.weather        || null,
-          is_recommended: isRecommended,
+          mood:            ctx.mood           || null,
+          time_of_day:     ctx.time_of_day    || null,
+          weather:         ctx.weather        || null,
+          is_recommended:  isRecommended,
         }),
       });
       if (res.ok) {
         const saved = await res.json();
-        const withId = updated.map((d) =>
-          d.logged_at === loggedDrink.logged_at && d.drink_id === drink.drink_id
+        const withId = optimistic.map((d) =>
+          d.logged_at === optimisticEntry.logged_at && d.drink_id === drink.drink_id
             ? { ...d, log_id: saved.log_id }
             : d
         );
         setLoggedDrinks(withId);
-        saveLoggedDrinks(withId);
+        updateCaffeineCache(withId);
+        // Schedule/update unrated notification with the new count
+        updateUnratedNotification(withId);
       }
     } catch (e) { console.error('Failed to save log to DB:', e); }
   };
 
   const handleAddDrink = (drink: Drink) => {
-    // Legacy entry point kept for any direct calls — routes through context modal
     handleDrinkSelected(drink);
   };
 
@@ -345,8 +435,12 @@ export default function LogScreen() {
     Alert.alert('Remove Drink', `Remove ${drink.name} from your log?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => {
-        const updated = loggedDrinks.filter((d) => d.logged_at !== drink.logged_at);
-        setLoggedDrinks(updated); saveLoggedDrinks(updated);
+        const updated = loggedDrinks.filter((d) =>
+          !(d.log_id === drink.log_id && d.logged_at === drink.logged_at)
+        );
+        setLoggedDrinks(updated);
+        updateCaffeineCache(updated);
+        updateUnratedNotification(updated);
         if (drink.log_id) {
           try { await fetch(`${API_BASE_URL}/api/logs/${drink.log_id}`, { method: 'DELETE' }); } catch {}
         }
@@ -373,7 +467,7 @@ export default function LogScreen() {
   const sections     = showWeekOnly ? weekSections : allSections;
   const totalToday   = allSections.find((s) => s.title === 'Today')?.totalCaffeine ?? 0;
 
-  // ─── RENDER: DRINK CARD ───────────────────────────────────────────────────
+  // ─── RENDER ───────────────────────────────────────────────────────────────
 
   const renderDrinkCard = ({ item }: { item: LoggedDrink }) => {
     const avg = averages[item.drink_id];
@@ -382,13 +476,10 @@ export default function LogScreen() {
         <View style={s.cardTop}>
           <View style={{ flex: 1 }}>
             {item.is_recommended && (
-              <View style={s.recTag}>
-                <Text style={s.recTagText}>✨ Recommended</Text>
-              </View>
+              <View style={s.recTag}><Text style={s.recTagText}>✨ Recommended</Text></View>
             )}
             <Text style={s.cardName}>{item.name}</Text>
             <Text style={s.cardMeta}>{item.category} · {item.caffeine_mg}mg</Text>
-            {/* Context pills on the card */}
             {(item.mood || item.time_of_day || item.weather) && (
               <View style={s.cardContextRow}>
                 {item.mood        && <View style={s.ctxBadge}><Text style={s.ctxBadgeText}>{item.mood.split(' ')[0]}</Text></View>}
@@ -424,8 +515,6 @@ export default function LogScreen() {
     );
   };
 
-  // ─── RENDER: SECTION HEADER ───────────────────────────────────────────────
-
   const renderSectionHeader = ({ section }: { section: DaySection }) => (
     <View style={s.sectionHeader}>
       <Text style={s.sectionTitle}>{section.title}</Text>
@@ -434,8 +523,6 @@ export default function LogScreen() {
       </View>
     </View>
   );
-
-  // ─── RENDER: DRINK PICKER OPTION ─────────────────────────────────────────
 
   const renderDrinkOption = ({ item }: { item: Drink }) => {
     const avg = averages[item.drink_id];
@@ -458,7 +545,6 @@ export default function LogScreen() {
   return (
     <View style={s.container}>
 
-      {/* Header */}
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>Drink Log</Text>
@@ -469,7 +555,6 @@ export default function LogScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Toggle */}
       <View style={s.toggleRow}>
         <TouchableOpacity style={[s.toggleBtn, showWeekOnly && s.toggleBtnActive]} onPress={() => setShowWeekOnly(true)}>
           <Text style={[s.toggleBtnText, showWeekOnly && s.toggleBtnTextActive]}>This Week</Text>
@@ -479,8 +564,12 @@ export default function LogScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Log list */}
-      {sections.length === 0 ? (
+      {loadingLogs ? (
+        <View style={s.emptyState}>
+          <ActivityIndicator size="large" color={C.primary} />
+          <Text style={[s.emptySubtext, { marginTop: 12 }]}>Loading your drinks...</Text>
+        </View>
+      ) : sections.length === 0 ? (
         <View style={s.emptyState}>
           <Text style={s.emptyTitle}>{showWeekOnly ? 'No drinks logged this week' : 'No drinks logged yet'}</Text>
           <Text style={s.emptySubtext}>Tap "+ Add" to log your first drink</Text>
@@ -496,7 +585,7 @@ export default function LogScreen() {
         />
       )}
 
-      {/* ── ADD DRINK MODAL ─────────────────────────────────────────────── */}
+      {/* ── ADD DRINK MODAL ── */}
       <Modal animationType="slide" transparent visible={addModalVisible}
         onRequestClose={() => { setAddModalVisible(false); setSelectedDrink(null); }}>
         <View style={s.modalOverlay}>
@@ -573,7 +662,7 @@ export default function LogScreen() {
         </View>
       </Modal>
 
-      {/* ── CONTEXT MODAL (mood / time / weather before logging) ─────────── */}
+      {/* ── CONTEXT MODAL ── */}
       <Modal animationType="slide" transparent visible={contextModalVisible}
         onRequestClose={() => setContextModalVisible(false)}>
         <View style={s.modalOverlay}>
@@ -584,21 +673,16 @@ export default function LogScreen() {
                 <Text style={[s.backBtnText, { fontSize: 14 }]}>Skip</Text>
               </TouchableOpacity>
             </View>
-
             <ScrollView style={{ padding: 20 }}>
               <Text style={s.ctxSectionLabel}>How are you feeling?</Text>
               <ContextPillRow options={MOOD_OPTIONS} selected={pendingMood} onSelect={setPendingMood} s={s} />
-
               <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Time of day</Text>
               <ContextPillRow options={TIME_OPTIONS} selected={pendingTime} onSelect={setPendingTime} s={s} />
-
               <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Weather</Text>
               <ContextPillRow options={WEATHER_OPTIONS} selected={pendingWeather} onSelect={setPendingWeather} s={s} />
-
               <Text style={s.ctxHint}>
                 This helps improve recommendations for you and the community. All fields are optional.
               </Text>
-
               <TouchableOpacity style={[s.confirmBtn, { marginTop: 8 }]} onPress={handleConfirmLog} activeOpacity={0.8}>
                 <Text style={s.confirmBtnText}>Log {drinkToLog?.name}</Text>
               </TouchableOpacity>
@@ -607,7 +691,7 @@ export default function LogScreen() {
         </View>
       </Modal>
 
-      {/* ── RATING MODAL ──────────────────────────────────────────────────── */}
+      {/* ── RATING MODAL ── */}
       <Modal animationType="fade" transparent visible={ratingModalVisible}
         onRequestClose={() => setRatingModalVisible(false)}>
         <View style={s.ratingOverlay}>
@@ -620,7 +704,6 @@ export default function LogScreen() {
                 {['','Poor','Fair','Good','Great','Excellent'][pendingRating]}
               </Text>
             )}
-            {/* Show context that will be saved with this rating */}
             {(drinkToRate?.mood || drinkToRate?.time_of_day || drinkToRate?.weather) && (
               <View style={s.ratingCtxRow}>
                 <Text style={s.ratingCtxLabel}>Saving with context: </Text>
@@ -686,7 +769,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   recTag:     { alignSelf: 'flex-start', backgroundColor: C.primaryMuted, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, marginBottom: 5, borderWidth: 1, borderColor: C.border },
   recTagText: { fontSize: 11, color: C.primary, fontWeight: '700' },
 
-  // Context badges on card
   cardContextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 5 },
   ctxBadge:       { backgroundColor: C.background, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: C.border },
   ctxBadgeText:   { fontSize: 10, color: C.textSecondary, fontWeight: '500' },
@@ -729,7 +811,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   retryBtn:    { backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
   retryText:   { color: '#fff', fontWeight: '600' },
 
-  // Context modal styles
   ctxSectionLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   pillRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   pill:            { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background },

@@ -89,7 +89,7 @@ export default function SignUp() {
 
         <View style={s.brandBlock}>
           <Image
-            source={require('@/assets/images/app_logo.png')}
+            source={require('@/assets/images/app_logo2.jpg')}
             style={s.logoMark}
             resizeMode="contain"
           />
