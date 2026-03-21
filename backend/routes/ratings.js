@@ -23,17 +23,18 @@ router.post('/', async (req, res) => {
 
     let result;
     if (existing.rows.length > 0) {
-      // Update existing rating
+      // Update existing rating — also update log_id so it links to the latest log entry
       result = await pool.query(
         `UPDATE ratings
          SET star_rating = $1,
-             mood        = COALESCE($2, mood),
-             time_of_day = COALESCE($3, time_of_day),
-             weather     = COALESCE($4, weather),
+             log_id      = COALESCE($2, log_id),
+             mood        = COALESCE($3, mood),
+             time_of_day = COALESCE($4, time_of_day),
+             weather     = COALESCE($5, weather),
              timestamp   = NOW()
-         WHERE user_id = $5 AND drink_id = $6
+         WHERE user_id = $6 AND drink_id = $7
          RETURNING *`,
-        [star_rating, mood || null, time_of_day || null, weather || null, user_id, drink_id]
+        [star_rating, log_id || null, mood || null, time_of_day || null, weather || null, user_id, drink_id]
       );
     } else {
       // Insert new rating

@@ -5,6 +5,7 @@ const usersRouter = require('./routes/users');
 const ratingsRouter = require('./routes/ratings');
 const logsRouter = require('./routes/logs');
 const recommendationsRouter = require('./routes/recommendations');
+const statisticsRoutes = require('./routes/statistics');
 
 const app = express();
 const PORT = 3000;
@@ -19,6 +20,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/ratings', ratingsRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/statistics', statisticsRoutes);
 
 // Health check
 app.get('/', (req, res) => {
