@@ -111,9 +111,9 @@ export default function ExploreScreen() {
         `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=1000&type=cafe&key=${GOOGLE_PLACES_API_KEY}`
       );
       const data = await res.json();
-      if (data.status === 'OK')           setCafes(data.results);
+      if (data.status === 'OK')                setCafes(data.results);
       else if (data.status === 'ZERO_RESULTS') setCafes([]);
-      else                                setError(`Places API error: ${data.status}`);
+      else                                     setError(`Places API error: ${data.status}`);
     } catch { setError('Could not load nearby cafes.'); }
     finally  { setLoading(false); }
   };
@@ -205,12 +205,8 @@ export default function ExploreScreen() {
               key={cafe.place_id}
               coordinate={{ latitude: cafe.geometry.location.lat, longitude: cafe.geometry.location.lng }}
               onPress={() => handleMarkerPress(cafe)}
-            >
-              {/* Custom pin — small brown circle */}
-              <View style={s.markerPin}>
-                <View style={s.markerDot} />
-              </View>
-            </Marker>
+              pinColor="#c0392b"
+            />
           ))}
         </MapView>
       )}
@@ -243,15 +239,15 @@ export default function ExploreScreen() {
       {selectedCafe && (
         <Animated.View style={[s.sheet, { height: sheetHeight }]}>
 
-          {/* Drag handle */}
-          <TouchableOpacity style={s.sheetHandle} onPress={toggleSheetExpand} activeOpacity={0.7}>
-            <View style={s.handleBar} />
-          </TouchableOpacity>
-
-          {/* Close */}
-          <TouchableOpacity style={s.closeBtn} onPress={handleCloseSheet}>
-            <Text style={s.closeBtnText}>✕</Text>
-          </TouchableOpacity>
+          {/* Drag handle + close row — rendered ABOVE the ScrollView so nothing blocks it */}
+          <View style={s.sheetTopBar}>
+            <TouchableOpacity style={s.sheetHandleArea} onPress={toggleSheetExpand} activeOpacity={0.7}>
+              <View style={s.handleBar} />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.closeBtn} onPress={handleCloseSheet} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
+              <Text style={s.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
           <ScrollView
             scrollEnabled={sheetExpanded}
@@ -346,14 +342,15 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   myLocationBtn:  { position: 'absolute', bottom: 280, right: 16, backgroundColor: C.surface, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', shadowColor: C.cardShadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4, elevation: 4, borderWidth: 1, borderColor: C.border },
   myLocationIcon: { fontSize: 20, color: C.primary },
 
-  markerPin: { padding: 4 },
-  markerDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#c0392b', borderWidth: 2.5, borderColor: '#fff' },
+  sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12, overflow: 'hidden', borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
 
-  sheet:        { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12, overflow: 'hidden', borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
-  sheetHandle:  { alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
-  handleBar:    { width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 },
-  closeBtn:     { position: 'absolute', top: 14, right: 16, padding: 6 },
-  closeBtnText: { fontSize: 16, color: C.textMuted },
+  // Top bar sits above ScrollView — close button can never be blocked
+  sheetTopBar:    { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingBottom: 4, paddingHorizontal: 16 },
+  sheetHandleArea:{ flex: 1, alignItems: 'center' },
+  handleBar:      { width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 },
+  closeBtn:       { padding: 4 },
+  closeBtnText:   { fontSize: 18, color: C.textMuted },
+
   sheetContent: { paddingHorizontal: 20, paddingBottom: 48 },
 
   sheetTop:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, marginTop: 4 },

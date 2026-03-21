@@ -267,15 +267,20 @@ export default function LogScreen() {
         fetch(`${API_BASE_URL}/api/ratings/user/${user.uid}`),
       ]);
 
-      // Build a log_id → star_rating lookup from the user's ratings
-      // Keyed by log_id so each log entry only gets the rating for THAT specific log,
-      // not any other log of the same drink
-      const ratingsMap: Record<number, number> = {};
+      // Build TWO lookup maps from the user's ratings:
+      // 1. log_id → star_rating  (exact match — most reliable)
+      // 2. drink_id → star_rating (fallback for ratings saved without a log_id)
+      const ratingsByLogId: Record<number, number> = {};
+      const ratingsByDrinkId: Record<number, number> = {};
       if (ratingsRes.ok) {
         const ratingsData = await ratingsRes.json();
         ratingsData.forEach((r: any) => {
           if (r.log_id && r.star_rating) {
-            ratingsMap[r.log_id] = r.star_rating;
+            ratingsByLogId[r.log_id] = r.star_rating;
+          }
+          // Keep the most recent rating per drink as a fallback
+          if (r.drink_id && r.star_rating) {
+            ratingsByDrinkId[r.drink_id] = r.star_rating;
           }
         });
       }
@@ -283,28 +288,42 @@ export default function LogScreen() {
       if (!logsRes.ok) throw new Error('Failed to fetch logs');
       const rows = await logsRes.json();
 
-      // Map DB rows → LoggedDrink, merging in the user's rating for each drink
-      const drinks: LoggedDrink[] = rows.map((row: any) => ({
-        drink_id:                   row.drink_id,
-        name:                       row.drink_name ?? row.name,
-        category:                   row.category,
-        type:                       row.type        ?? '',
-        base:                       row.base        ?? '',
-        caffeine_mg:                row.caffeine_amount ?? row.caffeine_mg ?? 0,
-        shots:                      row.shots       ?? 0,
-        dairy_free:                 row.dairy_free  ?? false,
-        vegan:                      row.vegan       ?? false,
-        gluten_free:                row.gluten_free ?? false,
-        milk_alternative_available: row.milk_alternative_available ?? false,
-        log_id:                     row.log_id,
-        logged_at:                  row.timestamp ?? row.logged_at,
-        // Only apply a rating if one was saved for THIS specific log entry (matched by log_id)
-        user_rating:                row.user_rating ?? ratingsMap[row.log_id] ?? undefined,
-        is_recommended:             row.is_recommended ?? false,
-        mood:                       row.mood        ?? undefined,
-        time_of_day:                row.time_of_day ?? undefined,
-        weather:                    row.weather     ?? undefined,
-      }));
+      // Track which drink_ids we've already applied the fallback rating to.
+      // This ensures only the FIRST (most recent) log of a drink gets the
+      // drink-level fallback — subsequent logs of the same drink stay unrated.
+      const drinkRatingApplied = new Set<number>();
+
+      const drinks: LoggedDrink[] = rows.map((row: any) => {
+        // Priority: exact log_id match > drink_id fallback (first occurrence only)
+        let userRating: number | undefined = undefined;
+        if (row.log_id && ratingsByLogId[row.log_id] != null) {
+          userRating = ratingsByLogId[row.log_id];
+        } else if (!drinkRatingApplied.has(row.drink_id) && ratingsByDrinkId[row.drink_id] != null) {
+          userRating = ratingsByDrinkId[row.drink_id];
+          drinkRatingApplied.add(row.drink_id);
+        }
+
+        return {
+          drink_id:                   row.drink_id,
+          name:                       row.drink_name ?? row.name,
+          category:                   row.category,
+          type:                       row.type        ?? '',
+          base:                       row.base        ?? '',
+          caffeine_mg:                row.caffeine_amount ?? row.caffeine_mg ?? 0,
+          shots:                      row.shots       ?? 0,
+          dairy_free:                 row.dairy_free  ?? false,
+          vegan:                      row.vegan       ?? false,
+          gluten_free:                row.gluten_free ?? false,
+          milk_alternative_available: row.milk_alternative_available ?? false,
+          log_id:                     row.log_id,
+          logged_at:                  row.timestamp ?? row.logged_at,
+          user_rating:                userRating,
+          is_recommended:             row.is_recommended ?? false,
+          mood:                       row.mood        ?? undefined,
+          time_of_day:                row.time_of_day ?? undefined,
+          weather:                    row.weather     ?? undefined,
+        };
+      });
 
       setLoggedDrinks(drinks);
       updateCaffeineCache(drinks);

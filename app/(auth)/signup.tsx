@@ -19,20 +19,44 @@ try {
   isGoogleAvailable = true;
 } catch { /* not available */ }
 
+// ─── PASSWORD RULES ───────────────────────────────────────────────────────────
+
+const PASSWORD_RULES = [
+  { label: 'At least 8 characters',                    test: (pw: string) => pw.length >= 8 },
+  { label: 'At least one uppercase letter',             test: (pw: string) => /[A-Z]/.test(pw) },
+  { label: 'At least one lowercase letter',             test: (pw: string) => /[a-z]/.test(pw) },
+  { label: 'At least one number',                      test: (pw: string) => /[0-9]/.test(pw) },
+  { label: 'At least one special character (!@#$%^&*)', test: (pw: string) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw) },
+];
+
+const isPasswordValid = (pw: string) => PASSWORD_RULES.every((r) => r.test(pw));
+
+// ─── COMPONENT ────────────────────────────────────────────────────────────────
+
 export default function SignUp() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const C = Colors[colorScheme ?? 'light'];
   const s = makeStyles(C);
 
-  const [email, setEmail] = useState('');
+  const [email,       setEmail]       = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [password,    setPassword]    = useState('');
+  const [showRules,   setShowRules]   = useState(false);
+  const [loading,     setLoading]     = useState(false);
+
+  const allPassed = isPasswordValid(password);
 
   const onSignUp = async () => {
     if (!email || !password) {
       Alert.alert('Missing fields', 'Please fill in all fields.');
+      return;
+    }
+    if (!isPasswordValid(password)) {
+      Alert.alert(
+        'Password too weak',
+        'Your password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.'
+      );
       return;
     }
     try {
@@ -124,19 +148,38 @@ export default function SignUp() {
 
           <Text style={s.fieldLabel}>Password</Text>
           <TextInput
-            style={[s.input, loading && s.inputDisabled]}
+            style={[s.input, loading && s.inputDisabled, showRules && !allPassed && s.inputWeak]}
             placeholder="••••••••"
             placeholderTextColor={C.textMuted}
             secureTextEntry
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(v) => { setPassword(v); setShowRules(v.length > 0); }}
             editable={!loading}
           />
 
+          {/* Live password requirements — only shown while typing */}
+          {showRules && (
+            <View style={s.rulesBox}>
+              {PASSWORD_RULES.map((rule) => {
+                const pass = rule.test(password);
+                return (
+                  <View key={rule.label} style={s.ruleRow}>
+                    <Text style={[s.ruleMark, pass ? s.ruleMarkPass : s.ruleMarkFail]}>
+                      {pass ? '✓' : '○'}
+                    </Text>
+                    <Text style={[s.ruleText, pass && s.ruleTextPass]}>
+                      {rule.label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
           <TouchableOpacity
-            style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
+            style={[s.primaryBtn, (loading || !allPassed) && s.primaryBtnDisabled]}
             onPress={onSignUp}
-            disabled={loading}
+            disabled={loading || !allPassed}
             activeOpacity={0.8}
           >
             <Text style={s.primaryBtnText}>{loading ? 'Creating account...' : 'Create account'}</Text>
@@ -176,6 +219,8 @@ export default function SignUp() {
   );
 }
 
+// ─── STYLES ──────────────────────────────────────────────────────────────────
+
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   root:         { flex: 1, backgroundColor: C.background },
   scroll:       { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 48 },
@@ -192,6 +237,16 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   fieldLabel:   { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginBottom: 6, marginTop: 12 },
   input:        { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },
   inputDisabled:{ opacity: 0.5 },
+  inputWeak:    { borderColor: '#e57373' },
+
+  // Password rules checklist
+  rulesBox:     { marginTop: 10, backgroundColor: C.background, borderRadius: 10, borderWidth: 1, borderColor: C.border, padding: 12, gap: 6 },
+  ruleRow:      { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ruleMark:     { fontSize: 13, width: 16, textAlign: 'center' },
+  ruleMarkPass: { color: '#388e3c' },
+  ruleMarkFail: { color: C.textMuted },
+  ruleText:     { fontSize: 12, color: C.textMuted },
+  ruleTextPass: { color: '#388e3c' },
 
   primaryBtn:         { backgroundColor: C.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
   primaryBtnDisabled: { opacity: 0.6 },
