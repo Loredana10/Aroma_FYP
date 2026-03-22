@@ -1,7 +1,7 @@
 // constants/api.ts
 // Update this IP address whenever your network changes
 // Find your IP by running ipconfig and looking for the WiFi IPv4 address
-export const API_BASE_URL = 'http://aromafyp-production.up.railway.app';
+export const API_BASE_URL = 'https://aromafyp-production.up.railway.app';
 
 // Sync a Firebase user to PostgreSQL
 // Call this after every sign in and sign up
