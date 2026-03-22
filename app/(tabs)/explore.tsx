@@ -194,7 +194,7 @@ export default function ExploreScreen() {
         <MapView
           ref={mapRef}
           style={s.map}
-          provider={PROVIDER_GOOGLE}
+          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
           initialRegion={region}
           showsUserLocation
           showsMyLocationButton={false}
