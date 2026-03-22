@@ -205,6 +205,7 @@ export default function ExploreScreen() {
               key={cafe.place_id}
               coordinate={{ latitude: cafe.geometry.location.lat, longitude: cafe.geometry.location.lng }}
               onPress={() => handleMarkerPress(cafe)}
+              onSelect={() => handleMarkerPress(cafe)}
               pinColor="#c0392b"
             />
           ))}
