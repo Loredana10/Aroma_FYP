@@ -198,7 +198,10 @@ export default function ExploreScreen() {
           initialRegion={region}
           showsUserLocation
           showsMyLocationButton={false}
-          onPress={handleCloseSheet}
+          onPress={() => {
+            if (Platform.OS === 'ios') return;
+            handleCloseSheet();
+          }}
         >
           {cafes.map((cafe) => (
             <Marker
@@ -206,6 +209,7 @@ export default function ExploreScreen() {
               coordinate={{ latitude: cafe.geometry.location.lat, longitude: cafe.geometry.location.lng }}
               onPress={() => handleMarkerPress(cafe)}
               onSelect={() => handleMarkerPress(cafe)}
+              tracksViewChanges={false}
               pinColor="#c0392b"
             />
           ))}
