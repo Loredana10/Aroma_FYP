@@ -11,6 +11,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/firebaseConfig';
 import * as Notifications from 'expo-notifications';
 import { setupNotifications } from '@/services/notifications';
+import { SystemBars } from 'react-native-edge-to-edge';
 
 export const unstable_settings = {
   initialRouteName: '(auth)',
@@ -31,7 +32,6 @@ function RouterStack() {
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   // ── Real-time Firestore listener for profile completion ───────────────────
-  // Your existing onSnapshot approach — unchanged
   useEffect(() => {
     if (!user) {
       setProfileCompleted(null);
@@ -62,7 +62,6 @@ function RouterStack() {
   }, [user?.uid]);
 
   // ── Auth navigation ───────────────────────────────────────────────────────
-  // Your existing navigation logic — unchanged
   useEffect(() => {
     if (loading || !initialCheckDone) return;
 
@@ -138,6 +137,7 @@ function RouterStack() {
 export default function RootLayout() {
   return (
     <AuthProvider>
+      <SystemBars style="auto" />
       <RouterStack />
     </AuthProvider>
   );
