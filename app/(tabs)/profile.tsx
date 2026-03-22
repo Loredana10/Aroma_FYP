@@ -43,21 +43,21 @@ const CAFFEINE_BY_AGE = [
     range: 'Ages 13–17',
     limit: '≤ 100 mg / day',
     color: '#e57373',
-    notes: 'Adolescents are more sensitive to caffeine. Up to 100 mg is the cautious upper limit — roughly one small espresso or two cans of cola.',
+    notes: 'Adolescents and children are more sensitive to caffeine. Up to 100 mg is the cautious upper limit.',
     examples: ['1 espresso shot (100 mg)', '2 cups of tea (~100 mg)'],
   },
   {
     range: 'Ages 18–24',
     limit: '≤ 200 mg / day',
     color: '#ffb74d',
-    notes: 'Young adults can tolerate more, but sleep quality remains sensitive. Up to 200 mg is generally safe. Avoid caffeine within 6 hours of bedtime.',
+    notes: 'Young adults can tolerate more, but sleep quality remains sensitive. Up to 200 mg is generally safe.',
     examples: ['1 large latte (200 mg)', '2 shots of espresso (200 mg)'],
   },
   {
     range: 'Ages 25–49',
     limit: '200–400 mg / day',
     color: '#81c784',
-    notes: 'Healthy adults can safely consume up to 400 mg per day — the widely cited upper safe limit per NHS and EFSA guidelines.',
+    notes: 'Healthy adults can safely consume up to 400 mg per day',
     examples: ['4 espresso shots (400 mg)', '2 large lattes (400 mg)'],
   },
   {
@@ -78,7 +78,7 @@ const CAFFEINE_BY_AGE = [
     range: 'Pregnant / Breastfeeding',
     limit: '≤ 200 mg / day',
     color: '#f06292',
-    notes: 'NHS and WHO recommend staying below 200 mg during pregnancy and breastfeeding. High intake is linked to low birth weight.',
+    notes: 'NHS and WHO recommend staying below 200 mg during pregnancy and breastfeeding.',
     examples: ['1 espresso shot (100 mg)', '2 cups of tea (~100 mg)'],
   },
 ];
@@ -477,7 +477,7 @@ export default function ProfileScreen() {
                 )}
               </View>
             ))}
-            <Text style={s.guideNote}>Sources: NHS, MedStar Health, Caffeine Informer. General guidelines only — consult your doctor if you have health conditions.</Text>
+            <Text style={s.guideNote}>Sources: NHS, MedStar Health, Caffeine Informer. General guidelines only. Consult your doctor if you have health conditions.</Text>
           </View>
         )}
       </View>
