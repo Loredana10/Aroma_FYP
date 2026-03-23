@@ -48,20 +48,20 @@ interface DaySection {
 // ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
 
 const MOOD_OPTIONS = [
-  { value: 'Tired and need a boost',         label: 'Need a boost',       icon: '⚡' },
-  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink', icon: '☕' },
-  { value: 'Relaxed and winding down',       label: 'Winding down',       icon: '🌙' },
+  { value: 'Tired and need a boost',         label: 'Need a boost' },
+  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink'},
+  { value: 'Relaxed and winding down',       label: 'Winding down'},
 ];
 
 const TIME_OPTIONS = [
-  { value: 'Morning',   label: 'Morning',   icon: '🌅' },
-  { value: 'Afternoon', label: 'Afternoon', icon: '☀️' },
-  { value: 'Evening',   label: 'Evening',   icon: '🌆' },
+  { value: 'Morning',   label: 'Morning'},
+  { value: 'Afternoon', label: 'Afternoon'},
+  { value: 'Evening',   label: 'Evening'},
 ];
 
 const WEATHER_OPTIONS = [
-  { value: 'Hot/Warm', label: 'Warm', icon: '🌤️' },
-  { value: 'Cold',     label: 'Cold', icon: '🌧️' },
+  { value: 'Hot/Warm', label: 'Warm'},
+  { value: 'Cold',     label: 'Cold'},
 ];
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ const Stars = ({
 // ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
 
 function ContextPillRow({ options, selected, onSelect, s }: {
-  options: { value: string; label: string; icon: string }[];
+  options: { value: string; label: string}[];
   selected: string | undefined;
   onSelect: (v: string) => void;
   s: any;
@@ -131,7 +131,6 @@ function ContextPillRow({ options, selected, onSelect, s }: {
           onPress={() => onSelect(selected === o.value ? '' : o.value)}
           activeOpacity={0.8}
         >
-          <Text style={s.pillIcon}>{o.icon}</Text>
           <Text style={[s.pillText, selected === o.value && s.pillTextSelected]}>{o.label}</Text>
         </TouchableOpacity>
       ))}
@@ -834,7 +833,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   pillRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   pill:            { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background },
   pillSelected:    { borderColor: C.primary, backgroundColor: C.primaryMuted },
-  pillIcon:        { fontSize: 14 },
   pillText:        { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
   pillTextSelected:{ color: C.primary, fontWeight: '700' },
   ctxHint:         { fontSize: 12, color: C.textMuted, textAlign: 'center', marginVertical: 16, lineHeight: 18 },
