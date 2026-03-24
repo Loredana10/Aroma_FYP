@@ -424,6 +424,7 @@ export default function Index() {
         ...pendingRec,
         logged_at:      new Date().toISOString(),
         is_recommended: true,
+        user_rating:    undefined,
       };
       const storageKey = `logged_drinks_${user.uid}`;
       const raw        = await AsyncStorage.getItem(storageKey);
@@ -559,7 +560,7 @@ export default function Index() {
     const loggedDrink: LoggedDrink = {
       ...drinkToLog,
       logged_at:   new Date().toISOString(),
-      user_rating: userRatings[drinkToLog.drink_id],
+      user_rating: undefined,
     };
 
     try {
