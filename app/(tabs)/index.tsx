@@ -86,6 +86,25 @@ interface CommunityStats {
   top_rated_drinks: TopRatedDrink[];
 }
 
+// ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
+
+const MOOD_OPTIONS = [
+  { value: 'Tired and need a boost',         label: 'Need a boost' },
+  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink' },
+  { value: 'Relaxed and winding down',       label: 'Winding down' },
+];
+
+const TIME_OPTIONS = [
+  { value: 'Morning',   label: 'Morning' },
+  { value: 'Afternoon', label: 'Afternoon' },
+  { value: 'Evening',   label: 'Evening' },
+];
+
+const WEATHER_OPTIONS = [
+  { value: 'Hot/Warm', label: 'Warm' },
+  { value: 'Cold',     label: 'Cold' },
+];
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 const clamp = (val: number, min: number, max: number) =>
@@ -117,6 +136,30 @@ const getWeekLabel = () => {
     d.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' });
   return `${fmt(mon)} – ${fmt(sun)}`;
 };
+
+// ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
+
+function ContextPillRow({ options, selected, onSelect, s }: {
+  options: { value: string; label: string }[];
+  selected: string | undefined;
+  onSelect: (v: string) => void;
+  s: any;
+}) {
+  return (
+    <View style={s.pillRow}>
+      {options.map((o) => (
+        <TouchableOpacity
+          key={o.value}
+          style={[s.pill, selected === o.value && s.pillSelected]}
+          onPress={() => onSelect(selected === o.value ? '' : o.value)}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.pillText, selected === o.value && s.pillTextSelected]}>{o.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
 
 // ─── MINI BAR CHART ──────────────────────────────────────────────────────────
 
@@ -259,6 +302,13 @@ export default function Index() {
   const [drinksError,      setDrinksError]      = useState<string | null>(null);
   const [userRatings,      setUserRatings]      = useState<Record<number, number>>({});
 
+  // ── Context modal state (Bug 4 fix) ─────────────────────────────────────
+  const [contextModalVisible, setContextModalVisible] = useState(false);
+  const [drinkToLog,          setDrinkToLog]          = useState<Drink | null>(null);
+  const [pendingMood,         setPendingMood]         = useState('');
+  const [pendingTime,         setPendingTime]         = useState('');
+  const [pendingWeather,      setPendingWeather]      = useState('');
+
   // ─── LOAD ON FOCUS ───────────────────────────────────────────────────────
 
   useFocusEffect(
@@ -295,8 +345,6 @@ export default function Index() {
         if (limitNum) {
           await AsyncStorage.setItem(`caffeine_limit_${user!.uid}`, String(limitNum));
         }
-
-        // Convert Firestore Timestamp → JS Date for the welcome notification check
         const createdAt: Date | null = data.createdAt?.toDate?.() ?? null;
         scheduleWelcomeNotification(user!.uid, createdAt);
       }
@@ -492,28 +540,40 @@ export default function Index() {
     );
   };
 
-  const handleQuickLog = async (drink: Drink) => {
+  // ── Bug 4 fix: selecting a drink from the quick-add list now opens the
+  //    context modal ("Before you log...") instead of logging immediately.
+  const handleQuickDrinkSelect = (drink: Drink) => {
     setQuickAddVisible(false);
     setSelectedCategory('All');
+    setDrinkToLog(drink);
+    setPendingMood('');
+    setPendingTime('');
+    setPendingWeather('');
+    setContextModalVisible(true);
+  };
+
+  const handleContextConfirm = async () => {
+    if (!drinkToLog || !user) return;
+    setContextModalVisible(false);
 
     const loggedDrink: LoggedDrink = {
-      ...drink,
+      ...drinkToLog,
       logged_at:   new Date().toISOString(),
-      user_rating: userRatings[drink.drink_id],
+      user_rating: userRatings[drinkToLog.drink_id],
     };
 
     try {
-      const stored   = await AsyncStorage.getItem(`logged_drinks_${user!.uid}`);
+      const stored   = await AsyncStorage.getItem(`logged_drinks_${user.uid}`);
       const existing: LoggedDrink[] = stored ? JSON.parse(stored) : [];
       const updated  = [loggedDrink, ...existing];
-      await AsyncStorage.setItem(`logged_drinks_${user!.uid}`, JSON.stringify(updated));
+      await AsyncStorage.setItem(`logged_drinks_${user.uid}`, JSON.stringify(updated));
 
       const todayKey = toDateKey(new Date().toISOString());
       const todayMg  = updated
         .filter((d) => toDateKey(d.logged_at) === todayKey)
         .reduce((sum, d) => sum + d.caffeine_mg, 0);
       await AsyncStorage.setItem(
-        `caffeine_today_${user!.uid}`,
+        `caffeine_today_${user.uid}`,
         JSON.stringify({ date: todayKey, mg: todayMg })
       );
 
@@ -523,19 +583,34 @@ export default function Index() {
       loadStats();
     } catch (e) { console.error(e); }
 
-    if (user) {
-      try {
-        await fetch(`${API_BASE_URL}/api/logs`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id:         user.uid,
-            drink_id:        drink.drink_id,
-            caffeine_amount: drink.caffeine_mg,
-          }),
-        });
-      } catch {}
-    }
+    try {
+      const savedRes = await fetch(`${API_BASE_URL}/api/logs`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:         user.uid,
+          drink_id:        drinkToLog.drink_id,
+          caffeine_amount: drinkToLog.caffeine_mg,
+          mood:            pendingMood    || null,
+          time_of_day:     pendingTime   || null,
+          weather:         pendingWeather || null,
+        }),
+      });
+      if (savedRes.ok) {
+        const savedLog = await savedRes.json();
+        const storageKey = `logged_drinks_${user.uid}`;
+        const raw = await AsyncStorage.getItem(storageKey);
+        const all: any[] = raw ? JSON.parse(raw) : [];
+        const withId = all.map((d) =>
+          d.logged_at === loggedDrink.logged_at && d.drink_id === drinkToLog.drink_id
+            ? { ...d, log_id: savedLog.log_id }
+            : d
+        );
+        await AsyncStorage.setItem(storageKey, JSON.stringify(withId));
+      }
+    } catch {}
+
+    setDrinkToLog(null);
   };
 
   // ─── RENDER HELPERS ──────────────────────────────────────────────────────
@@ -661,7 +736,7 @@ export default function Index() {
         </TouchableOpacity>
       )}
 
-      {/* ── RECENTLY LOGGED RECOMMENDATIONS ────────────────────────── */}
+      {/* ── RECENTLY LOGGED ────────────────────────────────────────── */}
       <View style={s.sectionHeader}>
         <Text style={s.sectionTitle}>Recently logged recommendations</Text>
         {recentDrinks.length > 0 && (
@@ -699,7 +774,7 @@ export default function Index() {
         </View>
       )}
 
-      {/* ── STATS SECTION ──────────────────────────────────────────── */}
+      {/* ── STATS ──────────────────────────────────────────────────── */}
       <View style={s.statsDivider} />
 
       <View style={s.sectionHeader}>
@@ -861,7 +936,8 @@ export default function Index() {
                   </ScrollView>
                 }
                 renderItem={({ item }) => (
-                  <TouchableOpacity style={s.drinkRow} onPress={() => handleQuickLog(item)} activeOpacity={0.7}>
+                  // Bug 4 fix: calls handleQuickDrinkSelect instead of handleQuickLog
+                  <TouchableOpacity style={s.drinkRow} onPress={() => handleQuickDrinkSelect(item)} activeOpacity={0.7}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.drinkRowName}>{item.name}</Text>
                       <Text style={s.drinkRowMeta}>{item.category} · {item.caffeine_mg}mg</Text>
@@ -871,6 +947,35 @@ export default function Index() {
                 )}
               />
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── CONTEXT MODAL (Bug 4 fix) ───────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={contextModalVisible}
+        onRequestClose={() => setContextModalVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { maxHeight: '75%' }]}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>Before you log…</Text>
+              <TouchableOpacity onPress={() => { setContextModalVisible(false); handleContextConfirm(); }}>
+                <Text style={[s.modalClose, { fontSize: 14, color: C.primary }]}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ padding: 20 }}>
+              <Text style={s.ctxSectionLabel}>How are you feeling?</Text>
+              <ContextPillRow options={MOOD_OPTIONS} selected={pendingMood} onSelect={setPendingMood} s={s} />
+              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Time of day</Text>
+              <ContextPillRow options={TIME_OPTIONS} selected={pendingTime} onSelect={setPendingTime} s={s} />
+              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Weather</Text>
+              <ContextPillRow options={WEATHER_OPTIONS} selected={pendingWeather} onSelect={setPendingWeather} s={s} />
+              <Text style={s.ctxHint}>
+                This helps improve recommendations for you and the community. All fields are optional.
+              </Text>
+              <TouchableOpacity style={s.confirmBtn} onPress={handleContextConfirm} activeOpacity={0.8}>
+                <Text style={s.confirmBtnText}>Log {drinkToLog?.name}</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1010,4 +1115,15 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   drinkRow:     { paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: C.borderSubtle, flexDirection: 'row', alignItems: 'center' },
   drinkRowName: { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 2 },
   drinkRowMeta: { fontSize: 12, color: C.textMuted },
+
+  // Context modal styles
+  ctxSectionLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pillRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  pill:            { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background },
+  pillSelected:    { borderColor: C.primary, backgroundColor: C.primaryMuted },
+  pillText:        { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
+  pillTextSelected:{ color: C.primary, fontWeight: '700' },
+  ctxHint:         { fontSize: 12, color: C.textMuted, textAlign: 'center', marginVertical: 16, lineHeight: 18 },
+  confirmBtn:      { backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  confirmBtnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

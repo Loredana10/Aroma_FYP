@@ -5,7 +5,7 @@ const pool    = require('../db');
 
 const PYTHON_REC_URL = process.env.PYTHON_REC_URL || 'http://localhost:5001';
 
-// Run migrations on startup — adds mood/time_of_day/weather to recommendations table
+// Run migrations on startup — adds mood/time_of_day/weather columns if missing
 async function runMigrations() {
   const client = await pool.connect();
   try {
@@ -22,6 +22,9 @@ async function runMigrations() {
 runMigrations();
 
 // POST /api/recommendations
+// Proxies the request to the Python engine and returns the 3 recommendations
+// to the app WITHOUT saving anything to the DB yet.
+// The DB insert only happens when the user taps "That's my drink" (see /chosen below).
 router.post('/', async (req, res) => {
   const { user_id, mood, time_of_day, weather, dietary_restrictions, explore_new } = req.body;
 
@@ -54,34 +57,50 @@ router.post('/', async (req, res) => {
 
     const data = await response.json();
 
-    // Save each recommended drink to the recommendations table with context
-    if (data.recommendations && data.recommendations.length > 0) {
-      for (const rec of data.recommendations) {
-        try {
-          await pool.query(`
-            INSERT INTO recommendations
-              (user_id, drink_id, match_percentage, mood, time_of_day, weather, timestamp)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
-          `, [
-            user_id,
-            rec.drink_id,
-            rec.match_percent ?? rec.score ?? null,
-            mood        || null,
-            time_of_day || null,
-            weather     || null,
-          ]);
-        } catch (dbErr) {
-          console.error('[Recommendations] DB insert error for drink', rec.drink_id, ':', dbErr.message);
-        }
-      }
-      console.log(`[Recommendations] Saved ${data.recommendations.length} recs to DB`);
-    }
+    // ── Bug 5 fix: do NOT save all 3 to DB here.
+    //    The DB insert now only happens in POST /api/recommendations/chosen
+    //    when the user explicitly selects "That's my drink".
+    console.log(`[Recommendations] Returned ${data.recommendations?.length ?? 0} recs to app — NOT saved to DB yet`);
 
     return res.json(data);
 
   } catch (err) {
     console.error('[Recommendations] Fetch error:', err.message);
     return res.status(503).json({ error: 'Could not reach recommendation engine' });
+  }
+});
+
+// POST /api/recommendations/chosen
+// Called when the user taps "That's my drink" on one of the 3 recommendations.
+// Only this single chosen drink is saved to the recommendations table.
+router.post('/chosen', async (req, res) => {
+  const { user_id, drink_id, match_percentage, mood, time_of_day, weather } = req.body;
+
+  if (!user_id || !drink_id) {
+    return res.status(400).json({ error: 'user_id and drink_id are required' });
+  }
+
+  try {
+    const result = await pool.query(`
+      INSERT INTO recommendations
+        (user_id, drink_id, match_percentage, mood, time_of_day, weather, timestamp)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING recommendation_id
+    `, [
+      user_id,
+      drink_id,
+      match_percentage ?? null,
+      mood        || null,
+      time_of_day || null,
+      weather     || null,
+    ]);
+
+    console.log(`[Recommendations] Saved chosen drink ${drink_id} for user ${user_id} → rec_id ${result.rows[0].recommendation_id}`);
+    return res.status(201).json({ recommendation_id: result.rows[0].recommendation_id });
+
+  } catch (err) {
+    console.error('[Recommendations] Failed to save chosen drink:', err.message);
+    return res.status(500).json({ error: 'Failed to save recommendation' });
   }
 });
 

@@ -44,8 +44,8 @@ const WEATHER_OPTIONS = [
 ];
 
 const EXPLORE_OPTIONS = [
-  { value: 'new',   label: 'Something new',            sublabel: "Discover drinks you have not tried yet" },
-  { value: 'tried', label: "Include drinks you've tried", sublabel: "Show anything, including drinks you have had before" },
+  { value: 'new',   label: 'Something new',               sublabel: "Discover drinks you have not tried yet" },
+  { value: 'tried', label: "Include drinks you've tried",  sublabel: "Show anything, including drinks you have had before" },
 ];
 
 const STEP_TITLES = [
@@ -279,7 +279,6 @@ export default function PersonalisedScreen() {
       const json = await res.json();
       const recs = json.recommendations || [];
       setRecommendations(recs);
-      // num_user_ratings is returned at the top level and also on each rec
       setNumUserRatings(json.num_user_ratings ?? recs[0]?.num_user_ratings ?? 0);
     } catch (err) {
       console.error('Recommendation fetch error:', err);
@@ -292,7 +291,9 @@ export default function PersonalisedScreen() {
     }
   };
 
-  // ─── SAVE TO HOME SCREEN ─────────────────────────────────────────────────
+  // ─── SAVE CHOSEN DRINK TO HOME SCREEN + DB ───────────────────────────────
+  // Bug 5 fix: only the drink the user taps "That's my drink" on is saved
+  // to the recommendations table. Previously all 3 were saved on every request.
 
   const handleSaveDrink = async (rec: Recommendation) => {
     if (!user) return;
@@ -312,12 +313,34 @@ export default function PersonalisedScreen() {
         weather:        result?.weather     ?? null,
         is_recommended: true,
       };
+
+      // Save to home screen (AsyncStorage) — unchanged
       await AsyncStorage.setItem(
         `pending_recommendation_${user.uid}`,
         JSON.stringify(pending)
       );
       setSavedId(rec.drink_id);
       schedulePendingRecNotification(rec.name);
+
+      // Save ONLY this chosen drink to the recommendations DB table
+      try {
+        await fetch(`${API_BASE_URL}/api/recommendations/chosen`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id:          user.uid,
+            drink_id:         rec.drink_id,
+            match_percentage: rec.match_percent ?? rec.score ?? null,
+            mood:             result?.mood      ?? null,
+            time_of_day:      result?.timeOfDay ?? null,
+            weather:          result?.weather   ?? null,
+          }),
+        });
+      } catch (dbErr) {
+        // Non-fatal — home screen card is already set, DB write failure doesn't block UX
+        console.error('Failed to save chosen recommendation to DB:', dbErr);
+      }
+
     } catch (err) {
       console.error('Save drink error:', err);
       Alert.alert('Error', 'Could not save this drink. Please try again.');
@@ -338,7 +361,6 @@ export default function PersonalisedScreen() {
 
   if (step === 4 && result) {
 
-    // Show accuracy warning if user has fewer than MIN_RATINGS_FOR_FULL_HYBRID ratings
     const showAccuracyWarning = numUserRatings < MIN_RATINGS_FOR_FULL_HYBRID;
 
     return (
@@ -375,7 +397,6 @@ export default function PersonalisedScreen() {
 
         <Text style={s.recSectionTitle}>Your recommendations</Text>
 
-        {/* Accuracy warning banner — shown for cold start and warm start users */}
         {showAccuracyWarning && !loadingRecs && (
           <View style={s.accuracyBanner}>
             <Text style={s.accuracyBannerTitle}>These recommendations may be limited in accuracy</Text>
@@ -682,7 +703,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   summaryLabel:     { fontSize: 11, color: C.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   summaryValue:     { fontSize: 15, color: C.text, fontWeight: '600' },
 
-  // Accuracy warning banner
   accuracyBanner: {
     backgroundColor: C.surface,
     borderRadius: 12, padding: 16,

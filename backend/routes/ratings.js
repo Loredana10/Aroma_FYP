@@ -1,12 +1,13 @@
 // backend/routes/ratings.js
 const express = require('express');
-const router = express.Router();
+const router = require('express').Router();
 const pool = require('../db');
 
 // POST /api/ratings
-// Save or update a user's rating for a drink.
-// Uses a manual check-then-update-or-insert because the ratings table
-// does not have a UNIQUE constraint on (user_id, drink_id).
+// Always inserts a NEW rating row tied to a specific log_id.
+// Each log entry has its own unique rating — users can rate the same drink
+// differently across multiple logs (different cafés, different preparations).
+// We no longer do UPDATE — every rating is a fresh INSERT with its own rating_id.
 router.post('/', async (req, res) => {
   const { user_id, drink_id, log_id, star_rating, mood, time_of_day, weather } = req.body;
 
@@ -15,39 +16,55 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Check if the user has already rated this drink
-    const existing = await pool.query(
-      `SELECT rating_id FROM ratings WHERE user_id = $1 AND drink_id = $2`,
-      [user_id, drink_id]
-    );
-
-    let result;
-    if (existing.rows.length > 0) {
-      // Update existing rating — also update log_id so it links to the latest log entry
-      result = await pool.query(
-        `UPDATE ratings
-         SET star_rating = $1,
-             log_id      = COALESCE($2, log_id),
-             mood        = COALESCE($3, mood),
-             time_of_day = COALESCE($4, time_of_day),
-             weather     = COALESCE($5, weather),
-             timestamp   = NOW()
-         WHERE user_id = $6 AND drink_id = $7
-         RETURNING *`,
-        [star_rating, log_id || null, mood || null, time_of_day || null, weather || null, user_id, drink_id]
+    if (log_id) {
+      // ── PRIMARY PATH: log_id provided ────────────────────────────────────
+      // Check if this specific log entry already has a rating.
+      // If it does, update it (user changed their mind on THIS specific drink instance).
+      // If not, insert a brand new rating row.
+      const existing = await pool.query(
+        `SELECT rating_id FROM ratings WHERE log_id = $1`,
+        [log_id]
       );
+
+      let result;
+      if (existing.rows.length > 0) {
+        // Update the rating for this specific log entry only
+        result = await pool.query(
+          `UPDATE ratings
+           SET star_rating = $1,
+               mood        = COALESCE($2, mood),
+               time_of_day = COALESCE($3, time_of_day),
+               weather     = COALESCE($4, weather),
+               timestamp   = NOW()
+           WHERE log_id = $5
+           RETURNING *`,
+          [star_rating, mood || null, time_of_day || null, weather || null, log_id]
+        );
+      } else {
+        // New rating for this log entry
+        result = await pool.query(
+          `INSERT INTO ratings (user_id, drink_id, log_id, star_rating, mood, time_of_day, weather, timestamp)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           RETURNING *`,
+          [user_id, drink_id, log_id, star_rating,
+           mood || null, time_of_day || null, weather || null]
+        );
+      }
+      return res.status(201).json(result.rows[0]);
+
     } else {
-      // Insert new rating
-      result = await pool.query(
+      // ── FALLBACK PATH: no log_id provided ────────────────────────────────
+      // Insert a new rating without a log link.
+      const result = await pool.query(
         `INSERT INTO ratings (user_id, drink_id, log_id, star_rating, mood, time_of_day, weather, timestamp)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+         VALUES ($1, $2, NULL, $3, $4, $5, $6, NOW())
          RETURNING *`,
-        [user_id, drink_id, log_id || null, star_rating,
+        [user_id, drink_id, star_rating,
          mood || null, time_of_day || null, weather || null]
       );
+      return res.status(201).json(result.rows[0]);
     }
 
-    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error saving rating:', error);
     res.status(500).json({ error: 'Failed to save rating' });
@@ -55,8 +72,8 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/ratings/user/:user_id
-// Fetch all ratings submitted by a specific user.
-// Used by the log screen to show a user's own star ratings on their log entries.
+// Fetch all ratings submitted by a specific user, including log_id.
+// The app uses log_id to match each rating to its specific log entry.
 router.get('/user/:user_id', async (req, res) => {
   const { user_id } = req.params;
   try {
@@ -78,7 +95,7 @@ router.get('/user/:user_id', async (req, res) => {
 });
 
 // GET /api/ratings/averages
-// Returns average star rating and count for every drink.
+// Returns average star rating and count for every drink (community-wide).
 router.get('/averages', async (req, res) => {
   try {
     const result = await pool.query(
