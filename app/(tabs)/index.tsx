@@ -376,16 +376,34 @@ export default function Index() {
   };
 
   const loadRecentDrinks = async () => {
+    if (!user) return;
     try {
-      const stored = await AsyncStorage.getItem(`logged_drinks_${user!.uid}`);
-      if (!stored) return;
-      const all: LoggedDrink[] = JSON.parse(stored);
+      // Fetch from DB — not AsyncStorage — so ratings are never stale
+      const res = await fetch(`${API_BASE_URL}/api/logs/${user.uid}`);
+      if (!res.ok) return;
+      const rows = await res.json();
       const seen = new Set<number>();
       const recent: LoggedDrink[] = [];
-      for (const d of all) {
-        if (!seen.has(d.drink_id)) {
-          seen.add(d.drink_id);
-          recent.push(d);
+      for (const row of rows) {
+        const drink_id = row.drink_id;
+        if (!seen.has(drink_id)) {
+          seen.add(drink_id);
+          recent.push({
+            drink_id,
+            name:        row.drink_name ?? row.name,
+            category:    row.category   ?? '',
+            caffeine_mg: row.caffeine_amount ?? row.caffeine_mg ?? 0,
+            type:        row.type        ?? '',
+            base:        row.base        ?? '',
+            dairy_free:  row.dairy_free  ?? false,
+            vegan:       row.vegan       ?? false,
+            gluten_free: row.gluten_free ?? false,
+            milk_alternative_available: row.milk_alternative_available ?? false,
+            shots:       row.shots       ?? 0,
+            logged_at:   row.timestamp   ?? row.logged_at,
+            log_id:      row.log_id,
+            // No user_rating here — home screen recent list never shows ratings
+          });
         }
         if (recent.length === 3) break;
       }
@@ -603,34 +621,10 @@ export default function Index() {
     if (!drinkToLog || !user) return;
     setContextModalVisible(false);
 
-    const loggedDrink: LoggedDrink = {
-      ...drinkToLog,
-      logged_at:   new Date().toISOString(),
-      user_rating: undefined,
-    };
-
     try {
-      const stored   = await AsyncStorage.getItem(`logged_drinks_${user.uid}`);
-      const existing: LoggedDrink[] = stored ? JSON.parse(stored) : [];
-      const updated  = [loggedDrink, ...existing];
-      await AsyncStorage.setItem(`logged_drinks_${user.uid}`, JSON.stringify(updated));
-
-      const todayKey = toDateKey(new Date().toISOString());
-      const todayMg  = updated
-        .filter((d) => toDateKey(d.logged_at) === todayKey)
-        .reduce((sum, d) => sum + d.caffeine_mg, 0);
-      await AsyncStorage.setItem(
-        `caffeine_today_${user.uid}`,
-        JSON.stringify({ date: todayKey, mg: todayMg })
-      );
-
-      setCaffeineMg(todayMg);
-      if (caffeineLimit) animateBar(todayMg, caffeineLimit);
-      loadRecentDrinks();
-      loadStats();
-    } catch (e) { console.error(e); }
-
-    try {
+      // Post directly to DB — do NOT write to AsyncStorage.
+      // AsyncStorage is the source of stale ratings; the log page always
+      // loads fresh from PostgreSQL, so we just need the DB row to exist.
       const savedRes = await fetch(`${API_BASE_URL}/api/logs`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -643,19 +637,26 @@ export default function Index() {
           weather:         pendingWeather || null,
         }),
       });
+
       if (savedRes.ok) {
         const savedLog = await savedRes.json();
-        const storageKey = `logged_drinks_${user.uid}`;
-        const raw = await AsyncStorage.getItem(storageKey);
-        const all: any[] = raw ? JSON.parse(raw) : [];
-        const withId = all.map((d) =>
-          d.logged_at === loggedDrink.logged_at && d.drink_id === drinkToLog.drink_id
-            ? { ...d, log_id: savedLog.log_id }
-            : d
+
+        // Update caffeine total in AsyncStorage (only mg, not the full drink object)
+        const todayKey = toDateKey(new Date().toISOString());
+        const raw = await AsyncStorage.getItem(`caffeine_today_${user.uid}`);
+        const current = raw ? JSON.parse(raw) : { date: todayKey, mg: 0 };
+        const newMg = (current.date === todayKey ? current.mg : 0) + drinkToLog.caffeine_mg;
+        await AsyncStorage.setItem(
+          `caffeine_today_${user.uid}`,
+          JSON.stringify({ date: todayKey, mg: newMg })
         );
-        await AsyncStorage.setItem(storageKey, JSON.stringify(withId));
+        setCaffeineMg(newMg);
+        if (caffeineLimit) animateBar(newMg, caffeineLimit);
       }
-    } catch {}
+
+      loadRecentDrinks();
+      loadStats();
+    } catch (e) { console.error(e); }
 
     setDrinkToLog(null);
   };

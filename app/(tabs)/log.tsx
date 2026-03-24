@@ -461,14 +461,30 @@ export default function LogScreen() {
     Alert.alert('Remove Drink', `Remove ${drink.name} from your log?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => {
+        // Optimistically remove from UI
         const updated = loggedDrinks.filter((d) =>
           !(d.log_id === drink.log_id && d.logged_at === drink.logged_at)
         );
         setLoggedDrinks(updated);
         updateCaffeineCache(updated);
         updateUnratedNotification(updated);
+
         if (drink.log_id) {
-          try { await fetch(`${API_BASE_URL}/api/logs/${drink.log_id}`, { method: 'DELETE' }); } catch {}
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/logs/${drink.log_id}`, { method: 'DELETE' });
+            if (!res.ok) {
+              // DB delete failed — reload from DB so the entry comes back
+              // rather than showing a ghost deleted state
+              console.error('Delete failed, reloading from DB');
+              loadLogsAndRatings();
+            }
+          } catch {
+            // Network error — reload from DB to stay in sync
+            loadLogsAndRatings();
+          }
+        } else {
+          // No log_id means this entry was never saved to DB (optimistic only)
+          // Nothing to delete server-side
         }
       }},
     ]);
