@@ -366,6 +366,14 @@ export default function LogScreen() {
         .filter((d) => toDateKey(d.logged_at) === todayKey)
         .reduce((s, d) => s + d.caffeine_mg, 0);
       await AsyncStorage.setItem(`caffeine_today_${user.uid}`, JSON.stringify({ date: todayKey, mg: todayMg }));
+
+      // Strip user_rating before writing to AsyncStorage.
+      // Ratings are always loaded fresh from PostgreSQL by loadLogsAndRatings —
+      // persisting them in the cache causes the home screen's "Log a drink" flow
+      // to pre-fill ratings on new log entries for previously-rated drinks.
+      const toCache = drinks.map(({ user_rating, ...rest }) => rest);
+      await AsyncStorage.setItem(`logged_drinks_${user.uid}`, JSON.stringify(toCache));
+
       const limitRaw = await AsyncStorage.getItem(`caffeine_limit_${user.uid}`);
       const limit    = limitRaw ? parseInt(limitRaw) : null;
       if (limit && todayMg > limit) {

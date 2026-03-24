@@ -302,12 +302,20 @@ export default function Index() {
   const [drinksError,      setDrinksError]      = useState<string | null>(null);
   const [userRatings,      setUserRatings]      = useState<Record<number, number>>({});
 
-  // ── Context modal state (Bug 4 fix) ─────────────────────────────────────
+  // ── Context modal state ──────────────────────────────────────────────────
   const [contextModalVisible, setContextModalVisible] = useState(false);
   const [drinkToLog,          setDrinkToLog]          = useState<Drink | null>(null);
   const [pendingMood,         setPendingMood]         = useState('');
   const [pendingTime,         setPendingTime]         = useState('');
   const [pendingWeather,      setPendingWeather]      = useState('');
+
+  // ── Rating modal state (for "Log + rate" pending recommendation flow) ────
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [ratingLogId,        setRatingLogId]        = useState<number | null>(null);
+  const [ratingDrinkId,      setRatingDrinkId]      = useState<number | null>(null);
+  const [ratingDrinkName,    setRatingDrinkName]    = useState('');
+  const [pendingRating,      setPendingRating]      = useState(0);
+  const [savingRating,       setSavingRating]       = useState(false);
 
   // ─── LOAD ON FOCUS ───────────────────────────────────────────────────────
 
@@ -419,6 +427,7 @@ export default function Index() {
   const handleLogPending = async () => {
     if (!user || !pendingRec) return;
     setLoggingDrink(true);
+    let savedLogId: number | null = null;
     try {
       const logEntry = {
         ...pendingRec,
@@ -459,6 +468,7 @@ export default function Index() {
         });
         if (savedRes.ok) {
           const savedLog = await savedRes.json();
+          savedLogId = savedLog.log_id ?? null;
           const withId = updated.map((d: any) =>
             d.logged_at === logEntry.logged_at && d.drink_id === pendingRec.drink_id
               ? { ...d, log_id: savedLog.log_id }
@@ -473,11 +483,47 @@ export default function Index() {
       cancelPendingRecNotification();
       loadRecentDrinks();
       loadStats();
-      Alert.alert('Logged!', `${pendingRec.name} has been added to your log.`);
+
+      // Open rating modal — user just drank this, so prompt them to rate it now
+      setPendingRating(0);
+      setRatingDrinkName(pendingRec.name);
+      setRatingDrinkId(pendingRec.drink_id);
+      setRatingLogId(savedLogId);
+      setRatingModalVisible(true);
     } catch {
       Alert.alert('Error', 'Could not log this drink. Please try again.');
     } finally {
       setLoggingDrink(false);
+    }
+  };
+
+  // ── Submit rating from the home screen rating modal ──────────────────────
+  const handleSubmitRating = async () => {
+    if (!user || !ratingDrinkId || pendingRating === 0) {
+      setRatingModalVisible(false);
+      return;
+    }
+    setSavingRating(true);
+    try {
+      await fetch(`${API_BASE_URL}/api/ratings`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id:     user.uid,
+          drink_id:    ratingDrinkId,
+          log_id:      ratingLogId ?? null,
+          star_rating: pendingRating,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to save rating:', e);
+    } finally {
+      setSavingRating(false);
+      setRatingModalVisible(false);
+      setPendingRating(0);
+      setRatingLogId(null);
+      setRatingDrinkId(null);
+      setRatingDrinkName('');
     }
   };
 
@@ -981,6 +1027,54 @@ export default function Index() {
         </View>
       </Modal>
 
+      {/* ── RATING MODAL (for "Log + rate" pending recommendation flow) ── */}
+      <Modal animationType="fade" transparent visible={ratingModalVisible}
+        onRequestClose={() => setRatingModalVisible(false)}>
+        <View style={s.ratingOverlay}>
+          <View style={s.ratingBox}>
+            <Text style={s.ratingTitle}>How was it?</Text>
+            <Text style={s.ratingDrinkName}>{ratingDrinkName}</Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {[1,2,3,4,5].map((star) => (
+                <TouchableOpacity key={star} onPress={() => setPendingRating(star)} activeOpacity={0.7}>
+                  <Text style={{
+                    fontSize: 40,
+                    color: star <= pendingRating ? C.primary : '#d0d0d0',
+                  }}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {pendingRating > 0 && (
+              <Text style={s.ratingLabel}>
+                {['','Poor','Fair','Good','Great','Excellent'][pendingRating]}
+              </Text>
+            )}
+            <View style={s.ratingBtns}>
+              <TouchableOpacity
+                style={s.ratingSkipBtn}
+                onPress={() => {
+                  setRatingModalVisible(false);
+                  setPendingRating(0);
+                }}
+              >
+                <Text style={s.ratingSkipText}>Rate later</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.ratingSaveBtn, pendingRating === 0 && { opacity: 0.4 }]}
+                onPress={handleSubmitRating}
+                disabled={savingRating || pendingRating === 0}
+                activeOpacity={0.8}
+              >
+                {savingRating
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.ratingSaveText}>Save Rating</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -1127,4 +1221,16 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   ctxHint:         { fontSize: 12, color: C.textMuted, textAlign: 'center', marginVertical: 16, lineHeight: 18 },
   confirmBtn:      { backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
   confirmBtnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  // Rating modal styles
+  ratingOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  ratingBox:       { backgroundColor: C.surface, borderRadius: 20, padding: 28, width: '100%', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.border },
+  ratingTitle:     { fontSize: 18, fontWeight: '700', color: C.text },
+  ratingDrinkName: { fontSize: 14, color: C.textMuted, marginBottom: 4 },
+  ratingLabel:     { fontSize: 15, fontWeight: '600', color: C.primary },
+  ratingBtns:      { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
+  ratingSkipBtn:   { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
+  ratingSkipText:  { color: C.textSecondary, fontWeight: '600', fontSize: 14 },
+  ratingSaveBtn:   { flex: 1, backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  ratingSaveText:  { color: '#fff', fontWeight: '600', fontSize: 14 },
 });
