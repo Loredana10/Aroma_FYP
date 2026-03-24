@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ActivityIndicator, Animated, ScrollView, Modal, FlatList, Image, Alert,
-  Dimensions,
+  ActivityIndicator, Animated, ScrollView, Modal, Image, Alert,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
 import { db } from '@/firebaseConfig';
@@ -17,8 +16,6 @@ import {
   cancelPendingRecNotification,
   scheduleWelcomeNotification,
 } from '@/services/notifications';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
@@ -86,25 +83,6 @@ interface CommunityStats {
   top_rated_drinks: TopRatedDrink[];
 }
 
-// ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
-
-const MOOD_OPTIONS = [
-  { value: 'Tired and need a boost',         label: 'Need a boost' },
-  { value: 'Fairly okay, just want a drink', label: 'Just fancy a drink' },
-  { value: 'Relaxed and winding down',       label: 'Winding down' },
-];
-
-const TIME_OPTIONS = [
-  { value: 'Morning',   label: 'Morning' },
-  { value: 'Afternoon', label: 'Afternoon' },
-  { value: 'Evening',   label: 'Evening' },
-];
-
-const WEATHER_OPTIONS = [
-  { value: 'Hot/Warm', label: 'Warm' },
-  { value: 'Cold',     label: 'Cold' },
-];
-
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 const clamp = (val: number, min: number, max: number) =>
@@ -136,30 +114,6 @@ const getWeekLabel = () => {
     d.toLocaleDateString('en-IE', { day: 'numeric', month: 'short' });
   return `${fmt(mon)} – ${fmt(sun)}`;
 };
-
-// ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
-
-function ContextPillRow({ options, selected, onSelect, s }: {
-  options: { value: string; label: string }[];
-  selected: string | undefined;
-  onSelect: (v: string) => void;
-  s: any;
-}) {
-  return (
-    <View style={s.pillRow}>
-      {options.map((o) => (
-        <TouchableOpacity
-          key={o.value}
-          style={[s.pill, selected === o.value && s.pillSelected]}
-          onPress={() => onSelect(selected === o.value ? '' : o.value)}
-          activeOpacity={0.8}
-        >
-          <Text style={[s.pillText, selected === o.value && s.pillTextSelected]}>{o.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
 
 // ─── MINI BAR CHART ──────────────────────────────────────────────────────────
 
@@ -292,22 +246,6 @@ export default function Index() {
   const [userStats,      setUserStats]      = useState<UserStats | null>(null);
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null);
   const [loadingStats,   setLoadingStats]   = useState(false);
-
-  const [quickAddVisible,  setQuickAddVisible]  = useState(false);
-  const [allDrinks,        setAllDrinks]        = useState<Drink[]>([]);
-  const [filteredDrinks,   setFilteredDrinks]   = useState<Drink[]>([]);
-  const [categories,       setCategories]       = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [loadingDrinks,    setLoadingDrinks]    = useState(false);
-  const [drinksError,      setDrinksError]      = useState<string | null>(null);
-  const [userRatings,      setUserRatings]      = useState<Record<number, number>>({});
-
-  // ── Context modal state ──────────────────────────────────────────────────
-  const [contextModalVisible, setContextModalVisible] = useState(false);
-  const [drinkToLog,          setDrinkToLog]          = useState<Drink | null>(null);
-  const [pendingMood,         setPendingMood]         = useState('');
-  const [pendingTime,         setPendingTime]         = useState('');
-  const [pendingWeather,      setPendingWeather]      = useState('');
 
   // ── Rating modal state (for "Log + rate" pending recommendation flow) ────
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
@@ -562,105 +500,6 @@ export default function Index() {
     );
   };
 
-  // ─── QUICK ADD ───────────────────────────────────────────────────────────
-
-  const openQuickAdd = async () => {
-    setQuickAddVisible(true);
-    if (allDrinks.length === 0) fetchDrinks();
-    fetchUserRatings();
-  };
-
-  const fetchDrinks = async () => {
-    setLoadingDrinks(true); setDrinksError(null);
-    try {
-      const res  = await fetch(`${API_BASE_URL}/api/drinks`);
-      if (!res.ok) throw new Error();
-      const data: Drink[] = await res.json();
-      setAllDrinks(data);
-      setFilteredDrinks(data);
-      setCategories(['All', ...Array.from(new Set(data.map((d) => d.category)))]);
-    } catch {
-      setDrinksError('Could not load drinks. Is the server running?');
-    } finally {
-      setLoadingDrinks(false);
-    }
-  };
-
-  const fetchUserRatings = async () => {
-    if (!user) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ratings/${user.uid}`);
-      if (!res.ok) return;
-      const data: { drink_id: number; star_rating: number }[] = await res.json();
-      const map: Record<number, number> = {};
-      data.forEach((r) => { map[r.drink_id] = r.star_rating; });
-      setUserRatings(map);
-    } catch {}
-  };
-
-  const handleCategorySelect = (cat: string) => {
-    setSelectedCategory(cat);
-    setFilteredDrinks(
-      cat === 'All' ? allDrinks : allDrinks.filter((d) => d.category === cat)
-    );
-  };
-
-  // ── Bug 4 fix: selecting a drink from the quick-add list now opens the
-  //    context modal ("Before you log...") instead of logging immediately.
-  const handleQuickDrinkSelect = (drink: Drink) => {
-    setQuickAddVisible(false);
-    setSelectedCategory('All');
-    setDrinkToLog(drink);
-    setPendingMood('');
-    setPendingTime('');
-    setPendingWeather('');
-    setContextModalVisible(true);
-  };
-
-  const handleContextConfirm = async () => {
-    if (!drinkToLog || !user) return;
-    setContextModalVisible(false);
-
-    try {
-      // Post directly to DB — do NOT write to AsyncStorage.
-      // AsyncStorage is the source of stale ratings; the log page always
-      // loads fresh from PostgreSQL, so we just need the DB row to exist.
-      const savedRes = await fetch(`${API_BASE_URL}/api/logs`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id:         user.uid,
-          drink_id:        drinkToLog.drink_id,
-          caffeine_amount: drinkToLog.caffeine_mg,
-          mood:            pendingMood    || null,
-          time_of_day:     pendingTime   || null,
-          weather:         pendingWeather || null,
-        }),
-      });
-
-      if (savedRes.ok) {
-        const savedLog = await savedRes.json();
-
-        // Update caffeine total in AsyncStorage (only mg, not the full drink object)
-        const todayKey = toDateKey(new Date().toISOString());
-        const raw = await AsyncStorage.getItem(`caffeine_today_${user.uid}`);
-        const current = raw ? JSON.parse(raw) : { date: todayKey, mg: 0 };
-        const newMg = (current.date === todayKey ? current.mg : 0) + drinkToLog.caffeine_mg;
-        await AsyncStorage.setItem(
-          `caffeine_today_${user.uid}`,
-          JSON.stringify({ date: todayKey, mg: newMg })
-        );
-        setCaffeineMg(newMg);
-        if (caffeineLimit) animateBar(newMg, caffeineLimit);
-      }
-
-      loadRecentDrinks();
-      loadStats();
-    } catch (e) { console.error(e); }
-
-    setDrinkToLog(null);
-  };
-
   // ─── RENDER HELPERS ──────────────────────────────────────────────────────
 
   const greeting = () => {
@@ -738,8 +577,8 @@ export default function Index() {
         </View>
       )}
 
-      {/* ── QUICK ADD ──────────────────────────────────────────────── */}
-      <TouchableOpacity style={s.quickAddBtn} onPress={openQuickAdd} activeOpacity={0.8}>
+      {/* ── LOG A DRINK ────────────────────────────────────────────── */}
+      <TouchableOpacity style={s.quickAddBtn} onPress={() => router.push('/log')} activeOpacity={0.8}>
         <View style={s.quickAddLeft}>
           <View style={s.quickAddIcon}>
             <Text style={s.quickAddPlus}>+</Text>
@@ -941,93 +780,6 @@ export default function Index() {
 
       <View style={{ height: 48 }} />
 
-      {/* ── QUICK-ADD MODAL ────────────────────────────────────────── */}
-      <Modal animationType="slide" transparent visible={quickAddVisible}
-        onRequestClose={() => setQuickAddVisible(false)}>
-        <View style={s.modalOverlay}>
-          <View style={s.modalSheet}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Log a Drink</Text>
-              <TouchableOpacity onPress={() => { setQuickAddVisible(false); setSelectedCategory('All'); setFilteredDrinks(allDrinks); }}>
-                <Text style={s.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {loadingDrinks ? (
-              <View style={s.modalCentred}>
-                <ActivityIndicator size="large" color={C.primary} />
-                <Text style={s.modalLoadText}>Loading drinks...</Text>
-              </View>
-            ) : drinksError ? (
-              <View style={s.modalCentred}>
-                <Text style={s.modalErrorText}>{drinksError}</Text>
-                <TouchableOpacity style={s.retryBtn} onPress={fetchDrinks}>
-                  <Text style={s.retryText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredDrinks}
-                keyExtractor={(item) => item.drink_id.toString()}
-                contentContainerStyle={{ paddingBottom: 32 }}
-                stickyHeaderIndices={[0]}
-                ListHeaderComponent={
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                    style={s.chipBar} contentContainerStyle={s.chipBarContent}>
-                    {categories.map((cat) => (
-                      <TouchableOpacity key={cat}
-                        style={[s.chip, selectedCategory === cat && s.chipActive]}
-                        onPress={() => handleCategorySelect(cat)}>
-                        <Text style={[s.chipText, selectedCategory === cat && s.chipTextActive]}>{cat}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                }
-                renderItem={({ item }) => (
-                  // Bug 4 fix: calls handleQuickDrinkSelect instead of handleQuickLog
-                  <TouchableOpacity style={s.drinkRow} onPress={() => handleQuickDrinkSelect(item)} activeOpacity={0.7}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.drinkRowName}>{item.name}</Text>
-                      <Text style={s.drinkRowMeta}>{item.category} · {item.caffeine_mg}mg</Text>
-                    </View>
-                    <Text style={s.chevron}>›</Text>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── CONTEXT MODAL (Bug 4 fix) ───────────────────────────────── */}
-      <Modal animationType="slide" transparent visible={contextModalVisible}
-        onRequestClose={() => setContextModalVisible(false)}>
-        <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { maxHeight: '75%' }]}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Before you log…</Text>
-              <TouchableOpacity onPress={() => { setContextModalVisible(false); handleContextConfirm(); }}>
-                <Text style={[s.modalClose, { fontSize: 14, color: C.primary }]}>Skip</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ padding: 20 }}>
-              <Text style={s.ctxSectionLabel}>How are you feeling?</Text>
-              <ContextPillRow options={MOOD_OPTIONS} selected={pendingMood} onSelect={setPendingMood} s={s} />
-              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Time of day</Text>
-              <ContextPillRow options={TIME_OPTIONS} selected={pendingTime} onSelect={setPendingTime} s={s} />
-              <Text style={[s.ctxSectionLabel, { marginTop: 16 }]}>Weather</Text>
-              <ContextPillRow options={WEATHER_OPTIONS} selected={pendingWeather} onSelect={setPendingWeather} s={s} />
-              <Text style={s.ctxHint}>
-                This helps improve recommendations for you and the community. All fields are optional.
-              </Text>
-              <TouchableOpacity style={s.confirmBtn} onPress={handleContextConfirm} activeOpacity={0.8}>
-                <Text style={s.confirmBtnText}>Log {drinkToLog?.name}</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* ── RATING MODAL (for "Log + rate" pending recommendation flow) ── */}
       <Modal animationType="fade" transparent visible={ratingModalVisible}
         onRequestClose={() => setRatingModalVisible(false)}>
@@ -1189,39 +941,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   rankMeta:      { fontSize: 12, color: C.textMuted },
   rankStars:     { fontSize: 13, color: '#b07d2e' },
   rankCount:     { fontSize: 11, color: C.textMuted, marginTop: 1 },
-
-  modalOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'flex-end' },
-  modalSheet:     { backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%', borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
-  modalHeader:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: C.border },
-  modalTitle:     { fontSize: 17, fontWeight: '700', color: C.text },
-  modalClose:     { fontSize: 20, color: C.textMuted },
-  modalCentred:   { padding: 40, alignItems: 'center' },
-  modalLoadText:  { marginTop: 12, color: C.textMuted, fontSize: 14 },
-  modalErrorText: { color: '#8b3a3a', fontSize: 14, textAlign: 'center', marginBottom: 16 },
-  retryBtn:       { backgroundColor: C.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
-  retryText:      { color: '#fff', fontWeight: '600' },
-
-  chipBar:        { backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.border, maxHeight: 52 },
-  chipBarContent: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip:           { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: C.background, borderWidth: 1, borderColor: C.border },
-  chipActive:     { backgroundColor: C.primary, borderColor: C.primary },
-  chipText:       { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
-  chipTextActive: { color: '#fff' },
-
-  drinkRow:     { paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: C.borderSubtle, flexDirection: 'row', alignItems: 'center' },
-  drinkRowName: { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 2 },
-  drinkRowMeta: { fontSize: 12, color: C.textMuted },
-
-  // Context modal styles
-  ctxSectionLabel: { fontSize: 13, fontWeight: '700', color: C.textSecondary, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
-  pillRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  pill:            { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.background },
-  pillSelected:    { borderColor: C.primary, backgroundColor: C.primaryMuted },
-  pillText:        { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
-  pillTextSelected:{ color: C.primary, fontWeight: '700' },
-  ctxHint:         { fontSize: 12, color: C.textMuted, textAlign: 'center', marginVertical: 16, lineHeight: 18 },
-  confirmBtn:      { backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
-  confirmBtnText:  { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   // Rating modal styles
   ratingOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: 24 },
