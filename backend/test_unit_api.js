@@ -8,7 +8,9 @@
  *
  * Following the Arrange-Act-Assert (AAA) pattern.
  * Tests cover: happy path, edge cases, boundary conditions,
- *              missing fields, invalid input, and database errors.
+ *              missing fields, invalid input, type errors, null input,
+ *              and database errors — following slide 12 guidance on
+ *              what AI-generated tests frequently miss.
  *
  * Run:  npx jest --verbose --forceExit
  */
@@ -138,6 +140,48 @@ describe('POST /api/logs — save a new log entry', () => {
     expect(res.status).toBe(400);
   });
 
+  // ── Type errors (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 201 when drink_id is a string — falsy check passes, pg coerces it', async () => {
+    // Arrange — !drink_id only checks falsy, so the string '3' passes validation
+    db.query.mockResolvedValue({ rows: [{ log_id: 55 }] });
+    // Act
+    const res = await request(app)
+      .post('/api/logs')
+      .send({ user_id: 'user1', drink_id: '3', caffeine_amount: 200 });
+    // Assert — documents that string coercion succeeds end-to-end
+    expect(res.status).toBe(201);
+  });
+
+  test('returns 400 when user_id is numeric zero (falsy — treated as missing)', async () => {
+    // Arrange — !0 is true, so the route rejects numeric zero the same as undefined
+    const res = await request(app)
+      .post('/api/logs')
+      .send({ user_id: 0, drink_id: 3, caffeine_amount: 200 });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 400 when user_id is explicitly null', async () => {
+    // Arrange — null is falsy so !null is true — treated the same as missing
+    const res = await request(app)
+      .post('/api/logs')
+      .send({ user_id: null, drink_id: 3, caffeine_amount: 200 });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when drink_id is explicitly null', async () => {
+    // Arrange — null is falsy — validation rejects it
+    const res = await request(app)
+      .post('/api/logs')
+      .send({ user_id: 'user1', drink_id: null, caffeine_amount: 200 });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
   // ── Database error ────────────────────────────────────────────────────────
 
   test('returns 500 when the database throws an error', async () => {
@@ -247,18 +291,21 @@ describe('DELETE /api/logs/:log_id — delete a log entry', () => {
     expect(res.status).toBe(200);
   });
 
-  // ── Edge case: log does not exist ─────────────────────────────────────────
-  // The actual logs.js DELETE route does not check rowCount, so it returns
-  // 200 regardless of whether the row existed. This test documents that behaviour.
+  // ── Known limitation: non-existent log_id ────────────────────────────────
+  // The DELETE route in logs.js does not check rowCount after the query,
+  // so it returns 200 whether or not the log_id existed in the database.
+  // This is a known gap in the route — ideally it should return 404 when
+  // rowCount is 0. This test documents the CURRENT behaviour accurately
+  // so that if the route is later improved, this test will catch the change.
 
-  test('returns 200 even when log_id does not exist (route does not check rowCount)', async () => {
-    // Arrange
+  test('returns 200 even when log_id does not exist in the database (known route limitation — does not check rowCount)', async () => {
+    // Arrange — DB reports zero rows deleted, but route ignores this
     db.query.mockResolvedValue({ rowCount: 0 });
 
     // Act
     const res = await request(app).delete('/api/logs/999');
 
-    // Assert
+    // Assert — documents current behaviour; ideally this should be 404
     expect(res.status).toBe(200);
   });
 
@@ -398,6 +445,50 @@ describe('POST /api/ratings — save or update a rating', () => {
     const res = await request(app)
       .post('/api/ratings')
       .send({ user_id: 'u1', drink_id: 2, star_rating: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  // ── Type errors (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 201 when star_rating is sent as the string "4" instead of a number', async () => {
+    // Arrange — !'4' is false so validation passes; pg coerces '4' to integer
+    db.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ rating_id: 20, star_rating: 4 }] });
+    // Act
+    const res = await request(app)
+      .post('/api/ratings')
+      .send({ user_id: 'u1', drink_id: 2, star_rating: '4', log_id: 13 });
+    // Assert — documents that string coercion passes validation and succeeds
+    expect(res.status).toBe(201);
+  });
+
+  test('returns 400 when drink_id is sent as numeric zero (falsy — treated as missing)', async () => {
+    // Arrange — !0 is true so the route treats drink_id: 0 as missing
+    const res = await request(app)
+      .post('/api/ratings')
+      .send({ user_id: 'u1', drink_id: 0, star_rating: 4 });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 400 when star_rating is explicitly null', async () => {
+    // Arrange — null is falsy so !null is true — treated the same as missing
+    const res = await request(app)
+      .post('/api/ratings')
+      .send({ user_id: 'u1', drink_id: 2, star_rating: null });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when user_id is explicitly null', async () => {
+    // Arrange — null is falsy — validation rejects it
+    const res = await request(app)
+      .post('/api/ratings')
+      .send({ user_id: null, drink_id: 2, star_rating: 4 });
+    // Assert
     expect(res.status).toBe(400);
   });
 
@@ -650,6 +741,39 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
       .post('/api/recommendations/chosen')
       .send({ user_id: 'u1' });
     expect(res.status).toBe(400);
+  });
+
+  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 400 when user_id is explicitly null', async () => {
+    // Arrange — null is falsy so !null triggers the guard clause
+    const res = await request(app)
+      .post('/api/recommendations/chosen')
+      .send({ user_id: null, drink_id: 3 });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when drink_id is explicitly null', async () => {
+    // Arrange — null is falsy — validation rejects it
+    const res = await request(app)
+      .post('/api/recommendations/chosen')
+      .send({ user_id: 'u1', drink_id: null });
+    // Assert
+    expect(res.status).toBe(400);
+  });
+
+  // ── Type error (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 201 when drink_id is sent as a string — pg coerces it to integer', async () => {
+    // Arrange — !'3' is false so validation passes; pg coerces string to integer
+    db.query.mockResolvedValue({ rows: [{ recommendation_id: 66 }] });
+    // Act
+    const res = await request(app)
+      .post('/api/recommendations/chosen')
+      .send({ user_id: 'u1', drink_id: '3', match_percentage: 80 });
+    // Assert — documents that string coercion succeeds end-to-end
+    expect(res.status).toBe(201);
   });
 
   // ── Database error ────────────────────────────────────────────────────────
