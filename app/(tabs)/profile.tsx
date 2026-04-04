@@ -609,7 +609,7 @@ const mhStyles = (C: typeof Colors.light) => StyleSheet.create({
   mascotEmoji:                { fontSize: 34 },
   mascotImage:                 { width: 110, height: 110, marginTop: -18 , marginLeft: 8},
   mascotFallbackLetter:       { fontSize: 30, fontWeight: '700', color: '#fff' },
-  changeMascotBtn:            { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  changeMascotBtn:            { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
   changeMascotBtnText:        { fontSize: 11, color: C.primary, fontWeight: '600' },
   mascotHeaderText:           { flex: 1 },
   mascotHeaderName:           { fontSize: 20, fontWeight: '700', color: C.text, marginBottom: 3 },
@@ -628,7 +628,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   sectionTitle:  { fontSize: 15, fontWeight: '600', color: C.text },
   sectionDescription: { fontSize: 13, color: C.textMuted, lineHeight: 19, marginBottom: 12 },
-  editLink:    { color: C.primary, fontSize: 14, fontWeight: '600' },
+  editLink:    { paddingVertical: 8, paddingHorizontal: 8, color: C.primary, fontSize: 14, fontWeight: '600' },
 
   infoRow:   { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
   infoLabel: { fontSize: 12, color: C.textMuted, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
@@ -641,7 +641,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   input:      { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },
 
   chipGroup:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  chip:             { paddingVertical: 7, paddingHorizontal: 13, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.background },
+  chip:             { paddingVertical: 12, paddingHorizontal: 13, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.background },
   chipSelected:     { backgroundColor: C.primary, borderColor: C.primary },
   chipText:         { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
   chipTextSelected: { color: '#fff', fontWeight: '600' },

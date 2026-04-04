@@ -596,7 +596,7 @@ export default function Index() {
         <View style={s.pendingCard}>
           <View style={s.pendingCardTop}>
             <Text style={s.pendingCardLabel}>YOUR RECOMMENDATION</Text>
-            <TouchableOpacity onPress={handleDismissPending} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <TouchableOpacity onPress={handleDismissPending} hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}>
               <Text style={s.pendingCardDismiss}>x</Text>
             </TouchableOpacity>
           </View>

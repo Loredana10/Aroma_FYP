@@ -211,7 +211,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   input:        { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },
   inputDisabled:{ opacity: 0.5 },
 
-  forgotBtn:  { alignSelf: 'flex-end', marginTop: 8 },
+  forgotBtn:  { alignSelf: 'flex-end', paddingVertical: 12, marginTop: 8 },
   forgotText: { fontSize: 13, color: C.primary, fontWeight: '500' },
 
   primaryBtn:         { backgroundColor: C.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 20 },

@@ -532,7 +532,7 @@ export default function LogScreen() {
           </View>
           <View style={s.cardRight}>
             <Text style={s.cardTime}>{formatTime(item.logged_at)}</Text>
-            <TouchableOpacity onPress={() => handleDeleteDrink(item)}>
+            <TouchableOpacity onPress={() => handleDeleteDrink(item)} hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}>
               <Text style={s.deleteBtn}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -779,11 +779,11 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   header:        { backgroundColor: C.surface, paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: C.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle:   { fontSize: 22, fontWeight: '700', color: C.text },
   headerSub:     { fontSize: 13, color: C.textMuted, marginTop: 2 },
-  addButton:     { backgroundColor: C.primary, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+  addButton:     { backgroundColor: C.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 20 },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
   toggleRow:           { flexDirection: 'row', margin: 16, backgroundColor: C.border, borderRadius: 10, padding: 3 },
-  toggleBtn:           { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  toggleBtn:           { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   toggleBtnActive:     { backgroundColor: C.surface, shadowColor: C.cardShadow, shadowOpacity: 1, shadowRadius: 4, elevation: 2 },
   toggleBtnText:       { fontSize: 13, color: C.textMuted, fontWeight: '500' },
   toggleBtnTextActive: { color: C.text, fontWeight: '700' },
@@ -803,7 +803,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   cardBottom:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: C.borderSubtle, paddingTop: 10 },
   avgText:     { fontSize: 12, color: C.textMuted },
   noRatingText:{ fontSize: 12, color: C.border },
-  rateBtn:         { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: C.primary },
+  rateBtn:         { paddingHorizontal: 10, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: C.primary },
   rateBtnDone:     { backgroundColor: C.primary },
   rateBtnText:     { fontSize: 12, color: C.primary, fontWeight: '600' },
   rateBtnTextDone: { color: '#fff' },

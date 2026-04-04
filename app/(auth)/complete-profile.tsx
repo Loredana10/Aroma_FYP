@@ -501,7 +501,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   agePreview: { fontSize: 12, color: C.primary, fontWeight: '500', marginTop: 6 },
 
   chipGroup:       { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip:            { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
+  chip:            { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: C.border, backgroundColor: C.surface },
   chipSelected:    { backgroundColor: C.primary, borderColor: C.primary },
   chipText:        { fontSize: 13, color: C.textSecondary, fontWeight: '500' },
   chipTextSelected:{ color: '#fff', fontWeight: '600' },
