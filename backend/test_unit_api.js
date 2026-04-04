@@ -56,7 +56,10 @@ function buildApp(routerPath) {
   const router = require(routerPath);
   const app    = express();
   app.use(express.json());
-  app.use('/api', router);
+  // Derive mount path from filename so routes match the real server layout.
+  // e.g. './routes/logs' → '/api/logs', matching how server.js mounts them.
+  const routeName = routerPath.replace('./routes/', '').replace(/.js$/, '');
+  app.use('/api/' + routeName, router);
   return app;
 }
 
