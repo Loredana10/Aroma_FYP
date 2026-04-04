@@ -224,7 +224,8 @@ def normalise_age_range(age_range):
     """
     if not age_range:
         return None
-    return str(age_range).strip().lower().replace(" ", "")
+    normalised = str(age_range).strip().lower().replace(" ", "")
+    return normalised if normalised else None
 
 
 def demographic_cold_start(user_id, user_demographics, all_demographics_df,
@@ -393,11 +394,12 @@ def build_feature_matrix(drinks_df):
         scaler.fit_transform(numerical),
         columns=["caffeine_mg_scaled", "shots_scaled"]
     )
+    numerical_scaled = numerical_scaled.fillna(0.0)
     feature_matrix = pd.concat(
         [category_dummies, type_dummies, base_dummies, binary, numerical_scaled],
         axis=1
     )
-    return feature_matrix.values, scaler
+    return feature_matrix.values.astype(np.float64), scaler
 
 
 def content_based_scores(user_ratings_df, drinks_df, feature_matrix):

@@ -22,13 +22,25 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        working-directory: backend
+        working-directory: recommender
         run: |
-          pip install "numpy==1.26.4" "pandas==2.2.2" "scikit-learn==1.4.2" "scipy==1.13.0" flask psycopg2-binary
+          pip install \
+            "numpy==1.26.4" \
+            "pandas==2.2.2" \
+            "scikit-learn==1.4.2" \
+            "scipy==1.13.0" \
+            flask \
+            psycopg2-binary \
+            pytest \
+            pytest-cov
 
-      - name: Run Python unit tests
-        working-directory: backend
-        run: python test_unit_recommender.py -v
+      - name: Run Python unit tests with coverage
+        working-directory: recommender
+        run: |
+          pytest tests/test_unit_recommender.py -v \
+            --cov=recommender \
+            --cov-report=term-missing \
+            --cov-fail-under=40
 
   node-unit-tests:
     name: Node.js API unit tests
