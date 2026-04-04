@@ -869,7 +869,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   ratingCtxRow:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: -4 },
   ratingCtxLabel:  { fontSize: 11, color: C.textMuted },
   ratingBtns:      { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
-  cancelBtn:       { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center' },
+  cancelBtn:       { paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center', marginBottom: 8 },
   cancelBtnText:   { color: C.textSecondary, fontWeight: '600' },
   ratingOptional:  { fontSize: 12, color: C.textMuted, marginTop: 4 },
 });
