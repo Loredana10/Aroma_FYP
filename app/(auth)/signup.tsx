@@ -39,13 +39,15 @@ export default function SignUp() {
   const C = Colors[colorScheme ?? 'light'];
   const s = makeStyles(C);
 
-  const [email,       setEmail]       = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password,    setPassword]    = useState('');
-  const [showRules,   setShowRules]   = useState(false);
-  const [loading,     setLoading]     = useState(false);
+  const [email,           setEmail]           = useState('');
+  const [displayName,     setDisplayName]     = useState('');
+  const [password,        setPassword]        = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showRules,       setShowRules]       = useState(false);
+  const [loading,         setLoading]         = useState(false);
 
-  const allPassed = isPasswordValid(password);
+  const allPassed       = isPasswordValid(password);
+  const passwordsMatch  = password === confirmPassword;
 
   const onSignUp = async () => {
     if (!email || !password) {
@@ -57,6 +59,10 @@ export default function SignUp() {
         'Password too weak',
         'Your password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.'
       );
+      return;
+    }
+    if (!passwordsMatch) {
+      Alert.alert('Passwords do not match', 'Please make sure both passwords are the same.');
       return;
     }
     try {
@@ -176,10 +182,28 @@ export default function SignUp() {
             </View>
           )}
 
+          <Text style={s.fieldLabel}>Confirm password</Text>
+          <TextInput
+            style={[
+              s.input,
+              loading && s.inputDisabled,
+              confirmPassword.length > 0 && !passwordsMatch && s.inputWeak,
+            ]}
+            placeholder="••••••••"
+            placeholderTextColor={C.textMuted}
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            editable={!loading}
+          />
+          {confirmPassword.length > 0 && !passwordsMatch && (
+            <Text style={s.mismatchText}>Passwords do not match</Text>
+          )}
+
           <TouchableOpacity
-            style={[s.primaryBtn, (loading || !allPassed) && s.primaryBtnDisabled]}
+            style={[s.primaryBtn, (loading || !allPassed || !passwordsMatch) && s.primaryBtnDisabled]}
             onPress={onSignUp}
-            disabled={loading || !allPassed}
+            disabled={loading || !allPassed || !passwordsMatch}
             activeOpacity={0.8}
           >
             <Text style={s.primaryBtnText}>{loading ? 'Creating account...' : 'Create account'}</Text>
@@ -238,6 +262,8 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   input:        { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },
   inputDisabled:{ opacity: 0.5 },
   inputWeak:    { borderColor: '#e57373' },
+
+  mismatchText: { fontSize: 12, color: '#e57373', marginTop: 4 },
 
   // Password rules checklist
   rulesBox:     { marginTop: 10, backgroundColor: C.background, borderRadius: 10, borderWidth: 1, borderColor: C.border, padding: 12, gap: 6 },

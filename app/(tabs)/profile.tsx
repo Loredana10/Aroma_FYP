@@ -4,7 +4,7 @@ import {
   TextInput, TouchableOpacity, ActivityIndicator, Dimensions,
 } from 'react-native';
 import { useAuth } from '@/contexts/auth_context';
-import { signOut } from 'firebase/auth';
+import { signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '@/firebaseConfig';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -200,6 +200,28 @@ export default function ProfileScreen() {
     } catch (e: any) { Alert.alert('Error', e.message); }
   };
 
+  const handleResetPassword = async () => {
+    if (!user?.email) return;
+    Alert.alert(
+      'Reset password',
+      `A password reset link will be sent to ${user.email}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send email',
+          onPress: async () => {
+            try {
+              await sendPasswordResetEmail(auth, user.email!);
+              Alert.alert('Email sent', 'Check your inbox for a password reset link.');
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Could not send reset email. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = () => {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -313,6 +335,9 @@ export default function ProfileScreen() {
           <Text style={s.infoLabel}>Email</Text>
           <Text style={s.infoValue}>{user?.email}</Text>
         </View>
+        <TouchableOpacity style={s.resetPasswordRow} onPress={handleResetPassword} activeOpacity={0.7}>
+          <Text style={s.resetPasswordText}>Reset password</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Profile Details */}
@@ -608,6 +633,9 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   infoRow:   { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.borderSubtle },
   infoLabel: { fontSize: 12, color: C.textMuted, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
   infoValue: { fontSize: 15, color: C.text, fontWeight: '500' },
+
+  resetPasswordRow:  { paddingTop: 12 },
+  resetPasswordText: { fontSize: 14, color: C.primary, fontWeight: '500' },
 
   fieldLabel: { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginTop: 14, marginBottom: 6 },
   input:      { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },

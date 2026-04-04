@@ -3,7 +3,7 @@ import { Colors } from '@/constants/theme';
 import { auth, db } from '@/firebaseConfig';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Link, useRouter } from 'expo-router';
-import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { GoogleAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
 import {
@@ -53,6 +53,19 @@ export default function SignIn() {
       Alert.alert('Sign in failed', e?.message ?? 'Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Enter your email', 'Please enter your email address above, then tap Forgot password.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      Alert.alert('Email sent', 'Check your inbox for a password reset link.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not send reset email. Please try again.');
     }
   };
 
@@ -131,6 +144,11 @@ export default function SignIn() {
             editable={!loading}
           />
 
+          {/* Forgot password */}
+          <TouchableOpacity onPress={onForgotPassword} activeOpacity={0.7} style={s.forgotBtn}>
+            <Text style={s.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[s.primaryBtn, loading && s.primaryBtnDisabled]}
             onPress={onSignIn}
@@ -192,6 +210,9 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   fieldLabel:   { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginBottom: 6, marginTop: 12 },
   input:        { backgroundColor: C.background, borderWidth: 1, borderColor: C.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: C.text },
   inputDisabled:{ opacity: 0.5 },
+
+  forgotBtn:  { alignSelf: 'flex-end', marginTop: 8 },
+  forgotText: { fontSize: 13, color: C.primary, fontWeight: '500' },
 
   primaryBtn:         { backgroundColor: C.primary, borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
   primaryBtnDisabled: { opacity: 0.6 },
