@@ -794,3 +794,429 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     expect(res.status).toBe(500);
   });
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DRINKS
+// Actual route behaviour (drinks.js):
+//   GET /        → 200 + all drinks array | 500 on DB error
+//   GET /:id     → 200 + single drink | 404 if not found | 500 on DB error
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('GET /api/drinks — fetch all drinks', () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/drinks'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+
+  test('returns 200 and the full drinks array', async () => {
+    // Arrange
+    db.query.mockResolvedValue({
+      rows: [
+        { drink_id: 1, name: 'Latte',     category: 'Espresso-Based', caffeine_mg: 200 },
+        { drink_id: 2, name: 'Americano', category: 'Espresso-Based', caffeine_mg: 200 },
+        { drink_id: 3, name: 'Chamomile Tea', category: 'Herbal Tea', caffeine_mg: 0 },
+      ]
+    });
+
+    // Act
+    const res = await request(app).get('/api/drinks');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(3);
+  });
+
+  // ── Edge case: empty catalogue ────────────────────────────────────────────
+
+  test('returns 200 and an empty array when no drinks exist in the database', async () => {
+    // Arrange
+    db.query.mockResolvedValue({ rows: [] });
+
+    // Act
+    const res = await request(app).get('/api/drinks');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app).get('/api/drinks');
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});
+
+
+describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/drinks'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+
+  test('returns 200 and the drink object when the drink exists', async () => {
+    // Arrange
+    db.query.mockResolvedValue({
+      rows: [{ drink_id: 1, name: 'Latte', category: 'Espresso-Based', caffeine_mg: 200 }]
+    });
+
+    // Act
+    const res = await request(app).get('/api/drinks/1');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body.drink_id).toBe(1);
+    expect(res.body.name).toBe('Latte');
+  });
+
+  // ── Edge case: drink not found ────────────────────────────────────────────
+
+  test('returns 404 when the drink_id does not exist', async () => {
+    // Arrange — empty rows means no drink found
+    db.query.mockResolvedValue({ rows: [] });
+
+    // Act
+    const res = await request(app).get('/api/drinks/999');
+
+    // Assert
+    expect(res.status).toBe(404);
+  });
+
+  // ── Type error (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 200 when drink_id is a valid numeric string — pg coerces it', async () => {
+    // Arrange — route passes the id straight to pg which coerces strings to integers
+    db.query.mockResolvedValue({
+      rows: [{ drink_id: 5, name: 'Espresso', category: 'Espresso-Based', caffeine_mg: 100 }]
+    });
+
+    // Act
+    const res = await request(app).get('/api/drinks/5');
+
+    // Assert
+    expect(res.status).toBe(200);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app).get('/api/drinks/1');
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USERS
+// Actual route behaviour (users.js):
+//   POST /    → 201 new user | 200 if already exists | 400 if missing fields | 500 on DB error
+//   GET  /:id → 200 + user object | 404 if not found | 500 on DB error
+//   PATCH /:id → 200 + updated user | 404 if not found | 500 on DB error
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('POST /api/users — create or retrieve a user', () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/users'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path: new user ──────────────────────────────────────────────────
+
+  test('returns 201 and the new user when the user does not already exist', async () => {
+    // Arrange — first query (check existing) returns empty, second (insert) returns new user
+    db.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ user_id: 'firebase_uid_1', email: 'test@test.com' }] });
+
+    // Act
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: 'firebase_uid_1', email: 'test@test.com', display_name: 'Test User' });
+
+    // Assert
+    expect(res.status).toBe(201);
+    expect(res.body.user_id).toBe('firebase_uid_1');
+  });
+
+  // ── Edge case: user already exists ───────────────────────────────────────
+
+  test('returns 200 and the existing user when the user already exists', async () => {
+    // Arrange — first query finds the existing user
+    db.query.mockResolvedValueOnce({
+      rows: [{ user_id: 'firebase_uid_1', email: 'test@test.com' }]
+    });
+
+    // Act
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: 'firebase_uid_1', email: 'test@test.com' });
+
+    // Assert — 200 not 201 because user already existed
+    expect(res.status).toBe(200);
+    expect(res.body.user_id).toBe('firebase_uid_1');
+  });
+
+  // ── Missing required fields (invalid input) ───────────────────────────────
+
+  test('returns 400 when user_id is missing', async () => {
+    const res = await request(app)
+      .post('/api/users')
+      .send({ email: 'test@test.com' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when email is missing', async () => {
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: 'firebase_uid_1' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when the request body is completely empty', async () => {
+    const res = await request(app)
+      .post('/api/users')
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+
+  test('returns 400 when user_id is explicitly null', async () => {
+    // Arrange — null is falsy so !null is true → treated as missing
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: null, email: 'test@test.com' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when email is explicitly null', async () => {
+    // Arrange — null is falsy → validation rejects it
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: 'firebase_uid_1', email: null });
+    expect(res.status).toBe(400);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app)
+      .post('/api/users')
+      .send({ user_id: 'firebase_uid_1', email: 'test@test.com' });
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});
+
+
+describe('GET /api/users/:id — fetch a user by ID', () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/users'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+
+  test('returns 200 and the user object when the user exists', async () => {
+    // Arrange
+    db.query.mockResolvedValue({
+      rows: [{ user_id: 'firebase_uid_1', email: 'test@test.com', display_name: 'Test User' }]
+    });
+
+    // Act
+    const res = await request(app).get('/api/users/firebase_uid_1');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body.user_id).toBe('firebase_uid_1');
+  });
+
+  // ── Edge case: user not found ────────────────────────────────────────────
+
+  test('returns 404 when the user_id does not exist in the database', async () => {
+    // Arrange — empty rows means no user found
+    db.query.mockResolvedValue({ rows: [] });
+
+    // Act
+    const res = await request(app).get('/api/users/nonexistent_user');
+
+    // Assert
+    expect(res.status).toBe(404);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app).get('/api/users/firebase_uid_1');
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});
+
+
+describe('PATCH /api/users/:id — update user profile fields', () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/users'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+
+  test('returns 200 and the updated user when profile fields are updated', async () => {
+    // Arrange
+    db.query.mockResolvedValue({
+      rows: [{ user_id: 'firebase_uid_1', age_range: '18-24', gender: 'Female', coffee_frequency: 'Daily' }]
+    });
+
+    // Act
+    const res = await request(app)
+      .patch('/api/users/firebase_uid_1')
+      .send({ age_range: '18-24', gender: 'Female', coffee_frequency: 'Daily' });
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body.age_range).toBe('18-24');
+  });
+
+  test('returns 200 when only one field is updated (partial update)', async () => {
+    // Arrange — COALESCE in the SQL means missing fields keep their existing values
+    db.query.mockResolvedValue({
+      rows: [{ user_id: 'firebase_uid_1', age_range: '25-34', gender: null, coffee_frequency: null }]
+    });
+
+    // Act
+    const res = await request(app)
+      .patch('/api/users/firebase_uid_1')
+      .send({ age_range: '25-34' });
+
+    // Assert
+    expect(res.status).toBe(200);
+  });
+
+  // ── Edge case: user not found ────────────────────────────────────────────
+
+  test('returns 404 when the user_id does not exist', async () => {
+    // Arrange — empty rows means no user was updated
+    db.query.mockResolvedValue({ rows: [] });
+
+    // Act
+    const res = await request(app)
+      .patch('/api/users/nonexistent_user')
+      .send({ age_range: '18-24' });
+
+    // Assert
+    expect(res.status).toBe(404);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app)
+      .patch('/api/users/firebase_uid_1')
+      .send({ age_range: '18-24' });
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LOGS — additional coverage for uncovered routes
+// GET /:user_id/today → 200 + { logs, total_caffeine_mg } | 500 on DB error
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("GET /api/logs/:user_id/today — fetch today's logs for a user", () => {
+  let app;
+  beforeAll(() => { app = buildApp('./routes/logs'); });
+  beforeEach(() => {
+    db.query.mockResolvedValue({ rows: [], rowCount: 0 });
+  });
+
+  // ── Happy path ────────────────────────────────────────────────────────────
+
+  test("returns 200 with today's logs and total caffeine when user has logs today", async () => {
+    // Arrange
+    db.query.mockResolvedValue({
+      rows: [
+        { log_id: 1, drink_name: 'Latte',    caffeine_amount: 200 },
+        { log_id: 2, drink_name: 'Espresso', caffeine_amount: 100 },
+      ]
+    });
+
+    // Act
+    const res = await request(app).get('/api/logs/user1/today');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('logs');
+    expect(res.body).toHaveProperty('total_caffeine_mg');
+    expect(res.body.logs).toHaveLength(2);
+  });
+
+  // ── Edge case: no logs today ───────────────────────────────────────────────
+
+  test('returns 200 with empty logs and zero caffeine when user has no logs today', async () => {
+    // Arrange
+    db.query.mockResolvedValue({ rows: [] });
+
+    // Act
+    const res = await request(app).get('/api/logs/user1/today');
+
+    // Assert
+    expect(res.status).toBe(200);
+    expect(res.body.logs).toEqual([]);
+    expect(res.body.total_caffeine_mg).toBe(0);
+  });
+
+  // ── Database error ────────────────────────────────────────────────────────
+
+  test('returns 500 when the database throws an error', async () => {
+    // Arrange
+    db.query.mockRejectedValue(new Error('DB error'));
+
+    // Act
+    const res = await request(app).get('/api/logs/user1/today');
+
+    // Assert
+    expect(res.status).toBe(500);
+  });
+});

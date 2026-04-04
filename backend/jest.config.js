@@ -12,4 +12,13 @@ module.exports = {
   ],
   // Never look inside node_modules
   testPathIgnorePatterns: ['/node_modules/'],
+
+  collectCoverageFrom: [
+    'routes/logs.js',
+    'routes/ratings.js',
+    'routes/statistics.js',
+    'routes/recommendations.js',
+    'routes/drinks.js',
+    'routes/users.js',
+  ],
 };
