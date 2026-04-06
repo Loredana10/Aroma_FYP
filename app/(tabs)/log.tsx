@@ -1,12 +1,12 @@
 import { API_BASE_URL } from '@/constants/api';
-import {
-  scheduleUnratedLogNotification,
-  cancelUnratedLogNotification,
-  scheduleCaffeineLimitNotification,
-} from '@/services/notifications';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth_context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import {
+  cancelUnratedLogNotification,
+  scheduleCaffeineLimitNotification,
+  scheduleUnratedLogNotification,
+} from '@/services/notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
@@ -844,7 +844,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   detailValue: { fontSize: 14, color: C.text, fontWeight: '600' },
   backBtn:     { marginTop: 8, paddingVertical: 8 },
   backBtnText: { color: C.primary, fontSize: 14, fontWeight: '500' },
-  confirmBtn:  { backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  confirmBtn: { flex: 1, backgroundColor: C.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
   confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   centred:     { padding: 40, alignItems: 'center' },
@@ -869,7 +869,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   ratingCtxRow:    { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: -4 },
   ratingCtxLabel:  { fontSize: 11, color: C.textMuted },
   ratingBtns:      { flexDirection: 'row', gap: 10, width: '100%', marginTop: 8 },
-  cancelBtn:       { paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: C.border, alignItems: 'center', marginBottom: 8 },
-  cancelBtnText:   { color: C.textSecondary, fontWeight: '600' },
+  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  cancelBtnText: { color: C.textSecondary, fontWeight: '600', fontSize: 15 },
   ratingOptional:  { fontSize: 12, color: C.textMuted, marginTop: 4 },
 });
