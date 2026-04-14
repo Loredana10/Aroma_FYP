@@ -1,4 +1,15 @@
-// app/(tabs)/profile.tsx  (was settings.tsx)
+// app/(tabs)/profile.tsx
+/**
+ * Profile screen where users can view and edit their personal information, set a daily caffeine limit, choose a mascot, and manage notification preferences.
+ * Key features:
+ * - Displays user email and profile details
+ * - Allows editing of display name, bio, and other profile information
+ * - Lets users set a daily caffeine limit, which integrates with the home screen progress bar
+ * - Provides a selection of mascots to choose from
+ * - Manages notification preferences for daily reminders and weekly recaps
+ */
+
+
 import {
   View, Text, Alert, StyleSheet, ScrollView, Modal, Image,
   TextInput, TouchableOpacity, ActivityIndicator, Dimensions,
@@ -444,7 +455,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* View caffeine guide — unchanged */}
+        {/* View caffeine guide*/}
         <TouchableOpacity style={s.guideToggle} onPress={() => setShowCaffeineGuide((v) => !v)}>
           <Text style={s.guideToggleText}>
             {showCaffeineGuide ? 'Hide caffeine guide' : 'View caffeine guide'}
@@ -465,7 +476,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Recommended caffeine intake by age — same style as above */}
+        {/* Recommended caffeine intake by age */}
         <TouchableOpacity style={s.guideToggle} onPress={() => setShowAgeGuide((v) => !v)}>
           <Text style={s.guideToggleText}>
             {showAgeGuide ? 'Hide recommended intake' : 'Recommended caffeine intake'}
@@ -560,7 +571,7 @@ export default function ProfileScreen() {
 }
 
 
-// ─── MASCOT HEADER COMPONENT ─────────────────────────────────────────────────
+// Mascot header component with avatar, name, and change mascot button
 
 function MascotHeader({ mascotId, displayName, onChangeMascot }: {
   mascotId: string | null;

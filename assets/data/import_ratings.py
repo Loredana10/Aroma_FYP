@@ -19,7 +19,6 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_values
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
 DB_CONFIG = {
     "host":     "localhost",
     "port":     5434,
@@ -30,7 +29,7 @@ DB_CONFIG = {
 
 CSV_PATH = "ratings.csv"
 
-# ─── DRINKS IN THE DATABASE (51 drinks) ───────────────────────────────────────
+# Total drinks in the survey (after stripping whitespace) that are in the database. Used to validate column names and skip any that don't match.
 DB_DRINKS = [
     'Espresso','Double Espresso','Americano','Cappuccino','Latte','Flat White',
     'Macchiato','Cortado','Affogato','Mocha','Oat Milk Latte','Almond Milk Latte',
@@ -46,7 +45,7 @@ DB_DRINKS = [
     'Irish Tea','Irish Tea with Milk'
 ]
 
-# ──────────────────────────────────────────────────────────────────────────────
+
 
 def import_ratings():
     # Load CSV

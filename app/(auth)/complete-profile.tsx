@@ -1,3 +1,16 @@
+// app/(auth)/complete-profile.tsx
+
+/*
+This screen is shown immediately after sign up, to collect extra info for personalisation
+Collected information:
+- Mascot pick (required)
+- Gender
+- Age 
+- Coffee/tea frequency
+- Dietary restrictions
+*/
+
+
 import { useRouter } from 'expo-router';
 import { useState, useRef } from 'react';
 import {
@@ -15,7 +28,7 @@ import { MASCOTS } from '@/constants/mascots';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// Helpers
 
 const getAgeRange = (age: number): string => {
   if (age < 18)  return 'Under 18';
@@ -26,7 +39,7 @@ const getAgeRange = (age: number): string => {
   return '55+';
 };
 
-// ─── STEP CONFIG ─────────────────────────────────────────────────────────────
+// Step config
 
 const STEPS = [
   {
@@ -49,7 +62,7 @@ const STEPS = [
 
 const TOTAL_STEPS = STEPS.length;
 
-// ─── COMPONENT ───────────────────────────────────────────────────────────────
+// Component
 
 export default function CompleteProfile() {
   const router      = useRouter();
@@ -74,7 +87,7 @@ export default function CompleteProfile() {
   const frequencyOptions = ['Every day', 'A few times a week', 'Once a week', 'A few times a month', 'Rarely'];
   const dietaryOptions   = ['None', 'Dairy-free', 'Vegan', 'Gluten-free', 'Nut allergy'];
 
-  // ─── PROGRESS ──────────────────────────────────────────────────────────────
+  // Progress animation
 
   const animateProgress = (toStep: number) => {
     Animated.spring(progressAnim, {
@@ -91,7 +104,7 @@ export default function CompleteProfile() {
     extrapolate: 'clamp',
   });
 
-  // ─── NAVIGATION ────────────────────────────────────────────────────────────
+  // Navigation and validation
 
   const goNext = () => {
     // Validate current step before advancing
@@ -120,7 +133,7 @@ export default function CompleteProfile() {
     animateProgress(prev);
   };
 
-  // ─── DIETARY ───────────────────────────────────────────────────────────────
+  // Dietary options
 
   const toggleDietary = (option: string) => {
     if (option === 'None') {
@@ -135,7 +148,7 @@ export default function CompleteProfile() {
     }
   };
 
-  // ─── SUBMIT ────────────────────────────────────────────────────────────────
+  // Submit final data - this will be saved in the users profile page
 
   const handleComplete = async () => {
     if (dietaryRestrictions.length === 0) {
@@ -159,7 +172,7 @@ export default function CompleteProfile() {
         profileCompleted: true,
       });
 
-      // Sync to PostgreSQL — non-fatal
+      // Sync to PostgreSQL
       try {
         await fetch(`${API_BASE_URL}/api/users/${user.uid}`, {
           method:  'PATCH',
@@ -183,7 +196,7 @@ export default function CompleteProfile() {
   const displayName = user?.displayName || 'there';
   const selectedMascot = MASCOTS.find((m) => m.id === mascotId);
 
-  // ─── RENDER ────────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <ScrollView
@@ -218,7 +231,7 @@ export default function CompleteProfile() {
         <Text style={s.stepSubtitle}>{STEPS[step].subtitle}</Text>
       </View>
 
-      {/* ── STEP 0: MASCOT PICKER ───────────────────────────────────────── */}
+      {/*Step 0: MASCOT PICKER */}
       {step === 0 && (
         <View style={s.mascotSection}>
           <View style={s.mascotGrid}>
@@ -268,7 +281,7 @@ export default function CompleteProfile() {
         </View>
       )}
 
-      {/* ── STEP 1: GENDER + AGE ────────────────────────────────────────── */}
+      {/* Step 1: GENDER + AGE */}
       {step === 1 && (
         <>
           <View style={s.section}>
@@ -304,7 +317,7 @@ export default function CompleteProfile() {
         </>
       )}
 
-      {/* ── STEP 2: COFFEE FREQUENCY ────────────────────────────────────── */}
+      {/* Step 2: COFFEE FREQUENCY */}
       {step === 2 && (
         <View style={s.section}>
           <View style={s.frequencyGroup}>
@@ -327,7 +340,7 @@ export default function CompleteProfile() {
         </View>
       )}
 
-      {/* ── STEP 3: DIETARY RESTRICTIONS ───────────────────────────────── */}
+      {/* Step 3: DIETARY RESTRICTIONS */}
       {step === 3 && (
         <View style={s.section}>
           <View style={s.chipGroup}>
@@ -346,7 +359,7 @@ export default function CompleteProfile() {
         </View>
       )}
 
-      {/* ── NAVIGATION BUTTONS ──────────────────────────────────────────── */}
+      {/* NAVIGATION BUTTONS */}
       <View style={s.navRow}>
         {step > 0 && (
           <TouchableOpacity style={s.backBtn} onPress={goBack} activeOpacity={0.8}>
@@ -382,9 +395,9 @@ export default function CompleteProfile() {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+// Styles
 
-const CELL_SIZE = (SCREEN_WIDTH - 48 - 4 * 10) / 5; // 5 per row, fits 10 in 2 rows
+const CELL_SIZE = (SCREEN_WIDTH - 48 - 4 * 10) / 5; 
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   root:   { flex: 1, backgroundColor: C.background },
@@ -408,7 +421,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   stepTitle:    { fontSize: 20, fontWeight: '700', color: C.text, marginBottom: 6, lineHeight: 26 },
   stepSubtitle: { fontSize: 13, color: C.textMuted, lineHeight: 19 },
 
-  // ── MASCOT GRID ──────────────────────────────────────────────────────────
+  // Mascot Grid
   mascotSection: { marginBottom: 24 },
 
   mascotGrid: {
@@ -493,7 +506,7 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   mascotPreviewName:  { fontSize: 16, fontWeight: '700', color: C.primary },
   mascotPreviewSub:   { fontSize: 12, color: C.textSecondary, marginTop: 1 },
 
-  // ── GENERAL SECTIONS ─────────────────────────────────────────────────────
+  // General Sections
   section:         { marginBottom: 24 },
   sectionLabel:    { fontSize: 15, fontWeight: '600', color: C.text, marginBottom: 10 },
 

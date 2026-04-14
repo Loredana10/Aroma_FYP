@@ -1,6 +1,5 @@
 """
 Aroma Recommender — User Scenario Tests
-=========================================
 Tests the live /recommend endpoint with realistic user scenarios.
 
 Requirements:
@@ -20,7 +19,7 @@ import sys
 
 RECOMMENDER_URL = "https://lavish-harmony-production-e688.up.railway.app/recommend"
 
-# ─── COLOUR OUTPUT ────────────────────────────────────────────────────────────
+# COLOUR OUTPUT
 
 RESET  = "\033[0m"
 GREEN  = "\033[92m"
@@ -30,7 +29,6 @@ DIM    = "\033[2m"
 YELLOW = "\033[93m"
 CYAN   = "\033[96m"
 
-# ─── KNOWN USER IDs FROM YOUR DATABASE ───────────────────────────────────────
 # These are the real Firebase UIDs of users already in your DB.
 # The test uses your existing survey data so CF/demographics work properly.
 # Add or swap IDs as needed.
@@ -39,7 +37,7 @@ REAL_USER_WITH_RATINGS  = "eFijJwNdAae9koCODYmRih4Ij0H2"  # 26 ratings
 NEW_USER_NO_RATINGS     = "scenario_cold_start_test_000"    # fake — always 0 ratings
 FAKE_USER_NO_DATA       = "fake_user_test_99999"            # does not exist in DB
 
-# ─── TEST ENGINE ──────────────────────────────────────────────────────────────
+# Test Engine
 
 results = []
 
@@ -112,9 +110,9 @@ def run_scenario(title, description, payload, checks_fn):
     print()
 
 
-# ─── SCENARIOS ────────────────────────────────────────────────────────────────
+# Scenarios
 
-# ── Scenario 1: Dairy-free user ───────────────────────────────────────────────
+# Scenario 1: Dairy-free user
 run_scenario(
     title       = "Scenario 1 — Dairy-free user",
     description = "User is dairy-free. No drink containing milk should be recommended.",
@@ -142,7 +140,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 2: Vegan user ────────────────────────────────────────────────────
+#  Scenario 2: Vegan user 
 run_scenario(
     title       = "Scenario 2 — Vegan user",
     description = "User is vegan. No animal products in recommendations.",
@@ -164,7 +162,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 3: Hot weather — iced drinks preferred ───────────────────────────
+#  Scenario 3: Hot weather — iced drinks preferred 
 run_scenario(
     title       = "Scenario 3 — Hot weather boost",
     description = "Weather is Hot/Warm. At least one iced drink should appear in top 3.",
@@ -186,7 +184,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 4: Evening wind-down — low caffeine preferred ────────────────────
+#  Scenario 4: Evening wind-down — low caffeine preferred 
 run_scenario(
     title       = "Scenario 4 — Evening wind-down",
     description = "User is winding down in the evening. Low/zero caffeine drinks should be favoured.",
@@ -208,7 +206,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 5: New user (cold start) — gets recommendations ─────────────────
+#  Scenario 5: New user (cold start) — gets recommendations 
 run_scenario(
     title       = "Scenario 5 — Brand new user (cold start)",
     description = "User has 0 ratings. Should get demographic or community-based recs, not crash.",
@@ -242,7 +240,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 6: Explore new — no already-rated drinks returned ────────────────
+#  Scenario 6: Explore new — no already-rated drinks returned 
 run_scenario(
     title       = "Scenario 6 — Explore new mode",
     description = "User selects 'Something new'. Their already-rated drinks must not appear.",
@@ -272,7 +270,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 7: Include tried — all drinks eligible ───────────────────────────
+#  Scenario 7: Include tried — all drinks eligible 
 run_scenario(
     title       = "Scenario 7 — Include tried mode",
     description = "User selects 'Include drinks I've tried'. All 51 drinks are eligible.",
@@ -300,7 +298,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 8: Multiple dietary restrictions ─────────────────────────────────
+#  Scenario 8: Multiple dietary restrictions 
 run_scenario(
     title       = "Scenario 8 — Vegan + gluten-free combined",
     description = "User is both vegan and gluten-free. All recs must satisfy both.",
@@ -328,7 +326,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 9: Unknown user (not in DB) — graceful fallback ──────────────────
+#  Scenario 9: Unknown user (not in DB) — graceful fallback 
 run_scenario(
     title       = "Scenario 9 — User not in database",
     description = "User ID does not exist in the database. Should not crash — community fallback.",
@@ -356,7 +354,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 10: Response structure integrity ─────────────────────────────────
+#  Scenario 10: Response structure integrity 
 run_scenario(
     title       = "Scenario 10 — Response structure check",
     description = "Verifies all required fields are present in every recommendation object.",
@@ -406,8 +404,7 @@ run_scenario(
     ]
 )
 
-# ─── SUMMARY printed at end of file ──────────────────────────────────────────
-
+#  SUMMARY printed at end of file
 
 # These user IDs do not exist in the DB so they always trigger cold start.
 # Each one has different dietary/contextual inputs to test specific behaviours.
@@ -420,9 +417,9 @@ FAKE_MORNING_BOOST_NEW = "fake_test_morning_005"
 FAKE_COLD_WEATHER_NEW  = "fake_test_cold_006"
 FAKE_HOT_WEATHER_NEW   = "fake_test_hot_007"
 
-# ─── ADDITIONAL SCENARIOS ─────────────────────────────────────────────────────
+# ADDITIONAL SCENARIOS for new users with various dietary restrictions and contexts, to verify cold start still respects filters and boosts.
 
-# ── Scenario 11: New user + dairy-free (cold start + dietary filter combined) ──
+#  Scenario 11: New user + dairy-free (cold start + dietary filter combined) 
 run_scenario(
     title       = "Scenario 11 — New user who is dairy-free (cold start + filter)",
     description = "Brand new user with no ratings but dairy-free restriction. "
@@ -457,7 +454,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 12: New user + vegan (cold start + vegan filter) ─────────────────
+#  Scenario 12: New user + vegan (cold start + vegan filter) 
 run_scenario(
     title       = "Scenario 12 — New user who is vegan (cold start + vegan filter)",
     description = "Brand new vegan user. Demographic cold start must still filter non-vegan drinks.",
@@ -485,7 +482,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 13: New user + nut allergy ───────────────────────────────────────
+#  Scenario 13: New user + nut allergy 
 run_scenario(
     title       = "Scenario 13 — New user with nut allergy",
     description = "New user with nut allergy. Hazelnut Latte and Almond drinks must not appear.",
@@ -519,7 +516,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 14: New user + all dietary restrictions ─────────────────────────
+#  Scenario 14: New user + all dietary restrictions 
 run_scenario(
     title       = "Scenario 14 — New user with all dietary restrictions",
     description = "Strictest possible user: dairy-free + vegan + gluten-free + nut allergy. "
@@ -569,7 +566,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 15: Morning energy boost ─────────────────────────────────────────
+#  Scenario 15: Morning energy boost 
 run_scenario(
     title       = "Scenario 15 — New user: tired, needs a boost in the morning",
     description = "Tired user in the morning wanting energy. "
@@ -604,7 +601,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 16: Cold weather — hot drinks favoured ───────────────────────────
+#  Scenario 16: Cold weather — hot drinks favoured 
 run_scenario(
     title       = "Scenario 16 — New user in cold weather",
     description = "Cold weather should boost hot drinks. No iced drinks should top the list.",
@@ -632,7 +629,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 17: Hot weather — iced drinks favoured ──────────────────────────
+#  Scenario 17: Hot weather — iced drinks favoured 
 run_scenario(
     title       = "Scenario 17 — New user in hot/warm weather",
     description = "Hot/Warm weather should boost iced drinks. At least 2 of 3 should be iced.",
@@ -660,7 +657,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 18: Experienced user (26 ratings) across different moods ─────────
+#  Scenario 18: Experienced user (26 ratings) across different moods 
 run_scenario(
     title       = "Scenario 18 — Experienced user: morning vs evening same day",
     description = "Same user, same weather, but morning mood (need boost) vs evening (wind-down). "
@@ -695,7 +692,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 19: Experienced user — explore new gives different recs ───────────
+#  Scenario 19: Experienced user — explore new gives different recs 
 run_scenario(
     title       = "Scenario 19 — Experienced user: explore new vs include tried",
     description = "Tests that explore_new=True returns different drinks than explore_new=False "
@@ -724,7 +721,7 @@ run_scenario(
     ]
 )
 
-# ── Scenario 20: Response consistently has num_user_ratings ───────────────────
+#  Scenario 20: Response consistently has num_user_ratings 
 run_scenario(
     title       = "Scenario 20 — num_user_ratings field present in response",
     description = "Frontend uses num_user_ratings to decide whether to show the accuracy warning. "
@@ -775,12 +772,12 @@ run_scenario(
 )
 
 
-# ─── FINAL SUMMARY ────────────────────────────────────────────────────────────
+#  FINAL SUMMARY 
 
 total    = len(results)
 passed   = sum(1 for r in results if r["passed"])
 failed   = total - passed
-scenarios = 21  # 10 original + 10 new + 1 extra (20b)
+scenarios = 21 
 
 print(f"\n{'='*60}")
 print(f"{BOLD}  Test Summary{RESET}")

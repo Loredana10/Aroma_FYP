@@ -1,4 +1,10 @@
-// backend/routes/statistics.js
+// app/backend/routes/statistics.js
+/**
+ * Routes for handling statistics-related API endpoints.
+ * This module defines the routes for fetching personal weekly statistics for a user and community-wide weekly statistics.
+ *
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js.
+ */
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
@@ -14,14 +20,13 @@ const getWeekStart = () => {
   return monday.toISOString();
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GET /api/statistics/user/:user_id
 // Personal weekly stats:
 //   - caffeine per day Mon–Sun (for the bar chart)
 //   - total drinks logged this week
 //   - most logged drink this week
 //   - days over limit (requires caffeineLimit passed as query param)
-// ─────────────────────────────────────────────────────────────────────────────
 router.get('/user/:user_id', async (req, res) => {
   const { user_id } = req.params;
   const caffeineLimit = req.query.limit ? parseInt(req.query.limit) : null;
@@ -103,7 +108,7 @@ router.get('/user/:user_id', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GET /api/statistics/community
 // Community weekly stats:
 //   - total drinks logged this week across all users
@@ -111,7 +116,6 @@ router.get('/user/:user_id', async (req, res) => {
 //   - top 3 highest rated drinks this week (by avg star_rating, min 3 ratings)
 // Also useful for implicit ratings / matrix factorisation:
 //   - log_count per drink can serve as implicit preference signal
-// ─────────────────────────────────────────────────────────────────────────────
 router.get('/community', async (req, res) => {
   const weekStart = getWeekStart();
 

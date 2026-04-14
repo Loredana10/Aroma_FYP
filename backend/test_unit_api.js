@@ -15,7 +15,7 @@
  * Run:  npx jest --verbose --forceExit
  */
 
-// ─── MOCK THE DATABASE ────────────────────────────────────────────────────────
+// DB MOCK
 // Must be called before any require() that loads a route file.
 // For local modules, Jest does NOT automatically use __mocks__ — you must
 // call jest.mock() explicitly even if __mocks__/db.js exists.
@@ -25,7 +25,7 @@ const express = require('express');
 const request = require('supertest');
 const db      = require('./db');
 
-// ─── HELPER ──────────────────────────────────────────────────────────────────
+// Helper
 
 /**
  * Builds a minimal Express app mounting a route file at /api.
@@ -63,14 +63,11 @@ function buildApp(routerPath) {
   return app;
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGS
+// Logs
 // Actual route behaviour (logs.js):
 //   POST /           → 201 on success | 400 if user_id or drink_id missing | 500 on DB error
 //   GET  /:user_id   → 200 + array (empty array if no logs) | 500 on DB error
 //   DELETE /:log_id  → 200 always (route does not check rowCount — no 404)
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('POST /api/logs — save a new log entry', () => {
   let app;
@@ -80,7 +77,7 @@ describe('POST /api/logs — save a new log entry', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //Happy Path
 
   test('returns 201 and the saved log row when all required fields are provided', async () => {
     // Arrange
@@ -117,7 +114,7 @@ describe('POST /api/logs — save a new log entry', () => {
     expect(res.body.log_id).toBe(99);
   });
 
-  // ── Missing required fields (invalid input) ───────────────────────────────
+  // Missing required fields (invalid input)
 
   test('returns 400 when user_id is missing', async () => {
     // Act
@@ -143,7 +140,7 @@ describe('POST /api/logs — save a new log entry', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Type errors (slide 12: what AI frequently misses) ─────────────────────
+  // Type errors (slide 12: what AI frequently misses)
 
   test('returns 201 when drink_id is a string — falsy check passes, pg coerces it', async () => {
     // Arrange — !drink_id only checks falsy, so the string '3' passes validation
@@ -165,7 +162,7 @@ describe('POST /api/logs — save a new log entry', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+  // Null input (slide 12: what AI frequently misses) 
 
   test('returns 400 when user_id is explicitly null', async () => {
     // Arrange — null is falsy so !null is true — treated the same as missing
@@ -185,7 +182,7 @@ describe('POST /api/logs — save a new log entry', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  // Database error
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -209,7 +206,7 @@ describe('GET /api/logs/:user_id — fetch logs for a user', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  // Happy path
 
   test('returns 200 and an array of logs for a user who has logs', async () => {
     // Arrange
@@ -229,7 +226,7 @@ describe('GET /api/logs/:user_id — fetch logs for a user', () => {
     expect(res.body).toHaveLength(2);
   });
 
-  // ── Edge case: user with no logs ──────────────────────────────────────────
+  // Edge case: user with no logs 
 
   test('returns 200 and an empty array for a user who has no logs', async () => {
     // Arrange
@@ -243,7 +240,7 @@ describe('GET /api/logs/:user_id — fetch logs for a user', () => {
     expect(res.body).toEqual([]);
   });
 
-  // ── Edge case: exactly one log ────────────────────────────────────────────
+  // Edge case: exactly one log 
 
   test('returns 200 and a single-item array when user has exactly one log', async () => {
     // Arrange
@@ -259,7 +256,7 @@ describe('GET /api/logs/:user_id — fetch logs for a user', () => {
     expect(res.body).toHaveLength(1);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  // Database error
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -281,7 +278,7 @@ describe('DELETE /api/logs/:log_id — delete a log entry', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  // Happy path
 
   test('returns 200 when a log is successfully deleted', async () => {
     // Arrange
@@ -294,7 +291,7 @@ describe('DELETE /api/logs/:log_id — delete a log entry', () => {
     expect(res.status).toBe(200);
   });
 
-  // ── Known limitation: non-existent log_id ────────────────────────────────
+  // Known limitation: non-existent log_id 
   // The DELETE route in logs.js does not check rowCount after the query,
   // so it returns 200 whether or not the log_id existed in the database.
   // This is a known gap in the route — ideally it should return 404 when
@@ -312,7 +309,7 @@ describe('DELETE /api/logs/:log_id — delete a log entry', () => {
     expect(res.status).toBe(200);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  // Database error 
 
   test('returns 500 when the database throws an error during delete', async () => {
     // Arrange
@@ -327,14 +324,12 @@ describe('DELETE /api/logs/:log_id — delete a log entry', () => {
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// RATINGS
+// Ratings
 // Actual route behaviour (ratings.js):
 //   POST /              → 201 on success (both insert paths and update path)
 //                         400 if user_id, drink_id, or star_rating is missing/falsy
 //                         500 on DB error
 //   GET  /user/:user_id → 200 + array | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('POST /api/ratings — save or update a rating', () => {
   let app;
@@ -343,7 +338,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  // Happy path 
 
   test('returns 201 when a new rating is inserted (no existing rating for this log)', async () => {
     // Arrange — first query finds no existing rating, second inserts
@@ -388,7 +383,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     expect(res.status).toBe(201);
   });
 
-  // ── Boundary: valid star_rating extremes ──────────────────────────────────
+  // Boundary: valid star_rating extremes 
 
   test('returns 201 when star_rating is 1 (minimum valid value)', async () => {
     // Arrange — boundary: 1 is the lowest rating a user can give
@@ -420,7 +415,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     expect(res.status).toBe(201);
   });
 
-  // ── Missing / falsy required fields ──────────────────────────────────────
+  // Missing / falsy required fields 
 
   test('returns 400 when star_rating is missing', async () => {
     const res = await request(app)
@@ -451,7 +446,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Type errors (slide 12: what AI frequently misses) ─────────────────────
+  //  Type errors (slide 12: what AI frequently misses) 
 
   test('returns 201 when star_rating is sent as the string "4" instead of a number', async () => {
     // Arrange — !'4' is false so validation passes; pg coerces '4' to integer
@@ -475,7 +470,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+  // Null input (slide 12: what AI frequently misses) 
 
   test('returns 400 when star_rating is explicitly null', async () => {
     // Arrange — null is falsy so !null is true — treated the same as missing
@@ -495,7 +490,7 @@ describe('POST /api/ratings — save or update a rating', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -519,7 +514,7 @@ describe('GET /api/ratings/user/:user_id — fetch all ratings for a user', () =
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and a ratings array for a user who has ratings', async () => {
     // Arrange
@@ -538,7 +533,7 @@ describe('GET /api/ratings/user/:user_id — fetch all ratings for a user', () =
     expect(res.body).toHaveLength(2);
   });
 
-  // ── Edge case: user with no ratings ──────────────────────────────────────
+  //  Edge case: user with no ratings 
 
   test('returns 200 and an empty array for a user with no ratings', async () => {
     // Arrange
@@ -552,7 +547,7 @@ describe('GET /api/ratings/user/:user_id — fetch all ratings for a user', () =
     expect(res.body).toEqual([]);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -567,12 +562,10 @@ describe('GET /api/ratings/user/:user_id — fetch all ratings for a user', () =
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// STATISTICS
+// Statistics
 // Actual route behaviour (statistics.js):
 //   GET /user/:user_id → 200 + stats object | 500 on DB error
 //   GET /community     → 200 + stats object | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('GET /api/statistics/user/:user_id — personal stats', () => {
   let app;
@@ -581,7 +574,7 @@ describe('GET /api/statistics/user/:user_id — personal stats', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and a stats object with all required fields', async () => {
     // Arrange — statistics route runs 3 sequential queries; all return empty rows
@@ -597,7 +590,7 @@ describe('GET /api/statistics/user/:user_id — personal stats', () => {
     expect(res.body).toHaveProperty('most_logged_drink');
   });
 
-  // ── Edge case: brand new user with no data ────────────────────────────────
+  //  Edge case: brand new user with no data 
 
   test('returns 200 with zeroed stats when user has no logs at all', async () => {
     // Arrange
@@ -611,7 +604,7 @@ describe('GET /api/statistics/user/:user_id — personal stats', () => {
     expect(res.body.total_drinks_this_week).toBe(0);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -633,7 +626,7 @@ describe('GET /api/statistics/community — community stats', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path
 
   test('returns 200 and community stats with all required fields', async () => {
     // Arrange
@@ -649,7 +642,7 @@ describe('GET /api/statistics/community — community stats', () => {
     expect(res.body).toHaveProperty('top_rated_drinks');
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -664,12 +657,10 @@ describe('GET /api/statistics/community — community stats', () => {
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// RECOMMENDATIONS
+// Recommendations
 // Actual route behaviour (recommendations.js):
 //   POST /        → 400 if user_id missing | 503 if Python engine unreachable
 //   POST /chosen  → 400 if user_id or drink_id missing | 201 on success | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('POST /api/recommendations — input validation', () => {
   let app;
@@ -678,7 +669,7 @@ describe('POST /api/recommendations — input validation', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Missing required fields — validated BEFORE the Python fetch call ───────
+  //  Missing required fields — validated BEFORE the Python fetch call 
 
   test('returns 400 when user_id is missing from the request body', async () => {
     // Act
@@ -714,7 +705,7 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 201 and recommendation_id when chosen drink is saved successfully', async () => {
     // Arrange
@@ -730,7 +721,7 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     expect(res.body.recommendation_id).toBe(55);
   });
 
-  // ── Missing required fields ───────────────────────────────────────────────
+  //  Missing required fields 
 
   test('returns 400 when user_id is missing', async () => {
     const res = await request(app)
@@ -746,7 +737,7 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+  //  Null input (slide 12: what AI frequently misses) 
 
   test('returns 400 when user_id is explicitly null', async () => {
     // Arrange — null is falsy so !null triggers the guard clause
@@ -766,7 +757,7 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Type error (slide 12: what AI frequently misses) ─────────────────────
+  //  Type error (slide 12: what AI frequently misses) 
 
   test('returns 201 when drink_id is sent as a string — pg coerces it to integer', async () => {
     // Arrange — !'3' is false so validation passes; pg coerces string to integer
@@ -779,7 +770,7 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
     expect(res.status).toBe(201);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error saving the chosen drink', async () => {
     // Arrange
@@ -796,12 +787,10 @@ describe('POST /api/recommendations/chosen — save the chosen drink', () => {
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DRINKS
+// Drinks
 // Actual route behaviour (drinks.js):
 //   GET /        → 200 + all drinks array | 500 on DB error
 //   GET /:id     → 200 + single drink | 404 if not found | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('GET /api/drinks — fetch all drinks', () => {
   let app;
@@ -810,7 +799,7 @@ describe('GET /api/drinks — fetch all drinks', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and the full drinks array', async () => {
     // Arrange
@@ -831,7 +820,7 @@ describe('GET /api/drinks — fetch all drinks', () => {
     expect(res.body).toHaveLength(3);
   });
 
-  // ── Edge case: empty catalogue ────────────────────────────────────────────
+  //  Edge case: empty catalogue 
 
   test('returns 200 and an empty array when no drinks exist in the database', async () => {
     // Arrange
@@ -845,7 +834,7 @@ describe('GET /api/drinks — fetch all drinks', () => {
     expect(res.body).toEqual([]);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -867,7 +856,7 @@ describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and the drink object when the drink exists', async () => {
     // Arrange
@@ -884,7 +873,7 @@ describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
     expect(res.body.name).toBe('Latte');
   });
 
-  // ── Edge case: drink not found ────────────────────────────────────────────
+  //  Edge case: drink not found 
 
   test('returns 404 when the drink_id does not exist', async () => {
     // Arrange — empty rows means no drink found
@@ -897,7 +886,7 @@ describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
     expect(res.status).toBe(404);
   });
 
-  // ── Type error (slide 12: what AI frequently misses) ─────────────────────
+  //  Type error (slide 12: what AI frequently misses) 
 
   test('returns 200 when drink_id is a valid numeric string — pg coerces it', async () => {
     // Arrange — route passes the id straight to pg which coerces strings to integers
@@ -912,7 +901,7 @@ describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
     expect(res.status).toBe(200);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -927,13 +916,11 @@ describe('GET /api/drinks/:id — fetch a single drink by ID', () => {
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// USERS
+// Users
 // Actual route behaviour (users.js):
 //   POST /    → 201 new user | 200 if already exists | 400 if missing fields | 500 on DB error
 //   GET  /:id → 200 + user object | 404 if not found | 500 on DB error
 //   PATCH /:id → 200 + updated user | 404 if not found | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe('POST /api/users — create or retrieve a user', () => {
   let app;
@@ -942,7 +929,7 @@ describe('POST /api/users — create or retrieve a user', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path: new user ──────────────────────────────────────────────────
+  //  Happy path: new user 
 
   test('returns 201 and the new user when the user does not already exist', async () => {
     // Arrange — first query (check existing) returns empty, second (insert) returns new user
@@ -960,7 +947,7 @@ describe('POST /api/users — create or retrieve a user', () => {
     expect(res.body.user_id).toBe('firebase_uid_1');
   });
 
-  // ── Edge case: user already exists ───────────────────────────────────────
+  //  Edge case: user already exists 
 
   test('returns 200 and the existing user when the user already exists', async () => {
     // Arrange — first query finds the existing user
@@ -978,7 +965,7 @@ describe('POST /api/users — create or retrieve a user', () => {
     expect(res.body.user_id).toBe('firebase_uid_1');
   });
 
-  // ── Missing required fields (invalid input) ───────────────────────────────
+  //  Missing required fields (invalid input) 
 
   test('returns 400 when user_id is missing', async () => {
     const res = await request(app)
@@ -1001,7 +988,7 @@ describe('POST /api/users — create or retrieve a user', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Null input (slide 12: what AI frequently misses) ─────────────────────
+  //  Null input (slide 12: what AI frequently misses) 
 
   test('returns 400 when user_id is explicitly null', async () => {
     // Arrange — null is falsy so !null is true → treated as missing
@@ -1019,7 +1006,7 @@ describe('POST /api/users — create or retrieve a user', () => {
     expect(res.status).toBe(400);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -1043,7 +1030,7 @@ describe('GET /api/users/:id — fetch a user by ID', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and the user object when the user exists', async () => {
     // Arrange
@@ -1059,7 +1046,7 @@ describe('GET /api/users/:id — fetch a user by ID', () => {
     expect(res.body.user_id).toBe('firebase_uid_1');
   });
 
-  // ── Edge case: user not found ────────────────────────────────────────────
+  //  Edge case: user not found 
 
   test('returns 404 when the user_id does not exist in the database', async () => {
     // Arrange — empty rows means no user found
@@ -1072,7 +1059,7 @@ describe('GET /api/users/:id — fetch a user by ID', () => {
     expect(res.status).toBe(404);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -1094,7 +1081,7 @@ describe('PATCH /api/users/:id — update user profile fields', () => {
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test('returns 200 and the updated user when profile fields are updated', async () => {
     // Arrange
@@ -1127,7 +1114,7 @@ describe('PATCH /api/users/:id — update user profile fields', () => {
     expect(res.status).toBe(200);
   });
 
-  // ── Edge case: user not found ────────────────────────────────────────────
+  //  Edge case: user not found
 
   test('returns 404 when the user_id does not exist', async () => {
     // Arrange — empty rows means no user was updated
@@ -1142,7 +1129,7 @@ describe('PATCH /api/users/:id — update user profile fields', () => {
     expect(res.status).toBe(404);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange
@@ -1159,10 +1146,8 @@ describe('PATCH /api/users/:id — update user profile fields', () => {
 });
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// LOGS — additional coverage for uncovered routes
+// Logs — additional coverage for uncovered routes
 // GET /:user_id/today → 200 + { logs, total_caffeine_mg } | 500 on DB error
-// ═══════════════════════════════════════════════════════════════════════════════
 
 describe("GET /api/logs/:user_id/today — fetch today's logs for a user", () => {
   let app;
@@ -1171,7 +1156,7 @@ describe("GET /api/logs/:user_id/today — fetch today's logs for a user", () =>
     db.query.mockResolvedValue({ rows: [], rowCount: 0 });
   });
 
-  // ── Happy path ────────────────────────────────────────────────────────────
+  //  Happy path 
 
   test("returns 200 with today's logs and total caffeine when user has logs today", async () => {
     // Arrange
@@ -1192,7 +1177,7 @@ describe("GET /api/logs/:user_id/today — fetch today's logs for a user", () =>
     expect(res.body.logs).toHaveLength(2);
   });
 
-  // ── Edge case: no logs today ───────────────────────────────────────────────
+  //  Edge case: no logs today 
 
   test('returns 200 with empty logs and zero caffeine when user has no logs today', async () => {
     // Arrange
@@ -1207,7 +1192,7 @@ describe("GET /api/logs/:user_id/today — fetch today's logs for a user", () =>
     expect(res.body.total_caffeine_mg).toBe(0);
   });
 
-  // ── Database error ────────────────────────────────────────────────────────
+  //  Database error 
 
   test('returns 500 when the database throws an error', async () => {
     // Arrange

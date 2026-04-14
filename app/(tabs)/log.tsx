@@ -1,3 +1,15 @@
+//app/(tabs)/log.tsx
+/** 
+ * This screen shows the user's personal log of drinks, organized by day, with the ability to add new logs, rate past logs, and see average ratings from all users.
+ * Key features:
+ * - Fetches logs and user ratings from the database, merging them so each log entry shows the user's rating if it exists.
+ * - Allows adding a new log with optional context (mood, time of day, weather).
+ * - Allows rating past logs, which updates both the local state and the database.
+ * - Shows average rating and rating count for each drink based on all user ratings.
+ * - Caches logs and today's caffeine total in AsyncStorage for offline access and quick loading, with a fallback to cache if the server is unreachable.
+ * - Schedules a notification if there are any unrated logs, prompting the user to rate them.
+ */
+
 import { API_BASE_URL } from '@/constants/api';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth_context';
@@ -16,7 +28,7 @@ import {
   TouchableOpacity, View,
 } from 'react-native';
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+// types
 
 interface Drink {
   drink_id: number; name: string; category: string; type: string;
@@ -45,7 +57,7 @@ interface DaySection {
   title: string; dateKey: string; totalCaffeine: number; data: LoggedDrink[];
 }
 
-// ─── CONTEXT OPTIONS ─────────────────────────────────────────────────────────
+// context options
 
 const MOOD_OPTIONS = [
   { value: 'Tired and need a boost',         label: 'Need a boost' },
@@ -64,7 +76,7 @@ const WEATHER_OPTIONS = [
   { value: 'Cold',     label: 'Cold'},
 ];
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// helpers
 
 const toDateKey = (iso: string) => iso.slice(0, 10);
 
@@ -100,7 +112,8 @@ const getCurrentWeekSections = (sections: DaySection[]) => {
   return sections.filter((s) => new Date(s.dateKey) >= monday);
 };
 
-// ─── STARS ───────────────────────────────────────────────────────────────────
+// stars component
+// Reusable star rating component, used both in the log screen's rating modal and on the home screen for drink recommendations.
 
 const Stars = ({
   rating, size = 16, interactive = false, onRate, activeColor,
@@ -114,7 +127,8 @@ const Stars = ({
   </View>
 );
 
-// ─── CONTEXT PILL ROW ────────────────────────────────────────────────────────
+// Context pill row component
+// Reusable component for selecting context options (mood, time of day, weather) when logging a drink.
 
 function ContextPillRow({ options, selected, onSelect, s }: {
   options: { value: string; label: string}[];
@@ -138,7 +152,7 @@ function ContextPillRow({ options, selected, onSelect, s }: {
   );
 }
 
-// ─── MAIN ────────────────────────────────────────────────────────────────────
+// Main
 
 export default function LogScreen() {
   const { user } = useAuth();
@@ -174,7 +188,7 @@ export default function LogScreen() {
   const [pendingRating,      setPendingRating]      = useState(0);
   const [savingRating,       setSavingRating]       = useState(false);
 
-  // ─── LOAD ────────────────────────────────────────────────────────────────
+  // Load logs and ratings on screen focus, and refetch drinks when the add modal is opened (if we don't have any drinks yet)
 
   useFocusEffect(
     useCallback(() => {
@@ -193,7 +207,8 @@ export default function LogScreen() {
     );
   }, [selectedCategory, allDrinks]);
 
-  // ─── API ─────────────────────────────────────────────────────────────────
+  // Fetch all drinks from the server to populate the "Add drink" modal, and extract unique categories for filtering.
+  // This is only done when the user opens the add modal for the first time, to avoid unnecessary fetches on every log screen visit.
 
   const fetchDrinks = async () => {
     setLoadingDrinks(true); setDrinksError(null);
@@ -248,9 +263,7 @@ export default function LogScreen() {
     finally  { setSavingRating(false); }
   };
 
-  // ─── LOAD LOGS + RATINGS FROM DB ─────────────────────────────────────────
-
-  /**
+    /**
    * Fetches logs AND the user's personal ratings from the DB in parallel,
    * then merges ratings onto the matching log entries by drink_id.
    * This ensures user_rating is always populated from PostgreSQL — not AsyncStorage —
@@ -382,8 +395,10 @@ export default function LogScreen() {
     } catch (e) { console.error(e); }
   };
 
-  // ─── HANDLERS ────────────────────────────────────────────────────────────
-
+  // Handlers for adding a drink, selecting context, and submitting the new log entry to the server. The flow is:
+  // 1. User taps "Add drink" → opens drink selection modal
+  // 2. User selects a drink → opens context selection modal
+  // 3. User selects context and confirms → submits to server and updates local state
   const handleDrinkSelected = (drink: Drink) => {
     setDrinkToLog(drink);
     setPendingMood('');
@@ -502,14 +517,14 @@ export default function LogScreen() {
 
   const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' });
 
-  // ─── SECTION DATA ─────────────────────────────────────────────────────────
+  // Sectioning and totals
 
   const allSections  = groupByDay(loggedDrinks);
   const weekSections = getCurrentWeekSections(allSections);
   const sections     = showWeekOnly ? weekSections : allSections;
   const totalToday   = allSections.find((s) => s.title === 'Today')?.totalCaffeine ?? 0;
 
-  // ─── RENDER ───────────────────────────────────────────────────────────────
+  // Renderers for the main SectionList, the drink selection FlatList, and the rating modal stars.
 
   const renderDrinkCard = ({ item }: { item: LoggedDrink }) => {
     const avg = averages[item.drink_id];
@@ -582,7 +597,7 @@ export default function LogScreen() {
     );
   };
 
-  // ─── MAIN RENDER ─────────────────────────────────────────────────────────
+  // Main
 
   return (
     <View style={s.container}>
@@ -627,7 +642,7 @@ export default function LogScreen() {
         />
       )}
 
-      {/* ── ADD DRINK MODAL ── */}
+      {/* ADD DRINK MODAL*/}
       <Modal animationType="slide" transparent visible={addModalVisible}
         onRequestClose={() => { setAddModalVisible(false); setSelectedDrink(null); }}>
         <View style={s.modalOverlay}>
@@ -704,7 +719,7 @@ export default function LogScreen() {
         </View>
       </Modal>
 
-      {/* ── CONTEXT MODAL ── */}
+      {/* CONTEXT MODAL */}
       <Modal animationType="slide" transparent visible={contextModalVisible}
         onRequestClose={() => setContextModalVisible(false)}>
         <View style={s.modalOverlay}>
@@ -733,7 +748,7 @@ export default function LogScreen() {
         </View>
       </Modal>
 
-      {/* ── RATING MODAL ── */}
+      {/* RATING MODAL */}
       <Modal animationType="fade" transparent visible={ratingModalVisible}
         onRequestClose={() => setRatingModalVisible(false)}>
         <View style={s.ratingOverlay}>
@@ -771,7 +786,7 @@ export default function LogScreen() {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+// Styles
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },

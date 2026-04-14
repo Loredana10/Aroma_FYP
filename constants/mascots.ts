@@ -1,19 +1,12 @@
 // constants/mascots.ts
-// ─────────────────────────────────────────────────────────────────────────────
 // Mascot definitions for the Aroma app.
-//
-// ADDING REAL IMAGES:
-//   - Add your PNG to assets/mascots/ (e.g. Cat1.png)
-//   - Set image: require('@/assets/mascots/Cat1.png')
-//   - You can leave placeholder on the ones not yet designed — they'll
-//     fall back to the emoji automatically everywhere in the app.
-// ─────────────────────────────────────────────────────────────────────────────
+
 
 export interface Mascot {
   id:           string;
   name:         string;
   placeholder:  string;  // emoji fallback — always required
-  image?:       any;     // optional — set when real PNG is ready
+  image?:       any;  
 }
 
 export const MASCOTS: Mascot[] = [

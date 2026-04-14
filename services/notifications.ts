@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// ── Notification IDs ──────────────────────────────────────────────────────
+//  Notification IDs
 export const NOTIF_IDS = {
   PENDING_REC:    'aroma_pending_rec',
   UNRATED_LOG:    'aroma_unrated_log',
@@ -20,7 +20,7 @@ const STORAGE_KEYS = {
   WELCOME_NOTIF_SENT:      'notif_welcome_sent',
 };
 
-// ── Foreground handler ────────────────────────────────────────────────────
+//  Foreground handler 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -30,7 +30,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// ── Request permissions ───────────────────────────────────────────────────
+//  Request permissions 
 export async function requestNotificationPermissions(): Promise<boolean> {
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
@@ -53,7 +53,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   return true;
 }
 
-// ── Cancel helpers ────────────────────────────────────────────────────────
+//  Cancel helpers 
 export async function cancelNotification(id: string): Promise<void> {
   await Notifications.cancelScheduledNotificationAsync(id);
 }
@@ -62,7 +62,6 @@ export async function cancelAllNotifications(): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 1. WELCOME NOTIFICATION  (15 seconds after first landing on home screen)
 //
 //    Two guards must both pass before the notification is scheduled:
@@ -74,7 +73,7 @@ export async function cancelAllNotifications(): Promise<void> {
 //    the last 5 minutes. This prevents existing users who have never triggered
 //    the flag from receiving it when they update the app or re-login.
 //    If createdAt is missing or cannot be read, the notification is skipped.
-// ─────────────────────────────────────────────────────────────────────────
+
 export async function scheduleWelcomeNotification(
   userId: string,
   createdAt: Date | null
@@ -87,8 +86,7 @@ export async function scheduleWelcomeNotification(
     return;
   }
 
-  // Guard 2: Account age — only send if the account was created within the
-  // last 5 minutes. This is the primary protection against existing users
+  // Guard 2: Account age — only send if the account was created within the last 5 minutes. This is the primary protection against existing users
   // receiving the welcome notification after an app update or re-login.
   if (!createdAt) {
     console.log('[Notifications] Welcome notification skipped — no createdAt timestamp available');
@@ -134,9 +132,8 @@ export async function scheduleWelcomeNotification(
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 2. PENDING RECOMMENDATION REMINDER  (15 min)
-// ─────────────────────────────────────────────────────────────────────────
+//    Fires 15 minutes after a recommendation is served if the user hasn't logged it yet.
 export async function schedulePendingRecNotification(drinkName: string): Promise<void> {
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) return;
@@ -167,11 +164,9 @@ export async function cancelPendingRecNotification(): Promise<void> {
   console.log('[Notifications] Pending rec reminder cancelled');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 3. UNRATED LOG REMINDER  (15 min)
 //    Fires whenever there are unrated drinks in the log.
 //    Cancelled when all drinks are rated.
-// ─────────────────────────────────────────────────────────────────────────
 export async function scheduleUnratedLogNotification(unratedCount: number): Promise<void> {
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) return;
@@ -204,9 +199,8 @@ export async function cancelUnratedLogNotification(): Promise<void> {
   console.log('[Notifications] Unrated log reminder cancelled');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 4. DAILY MORNING REMINDER  (every day at 08:00)
-// ─────────────────────────────────────────────────────────────────────────
+//   A gentle nudge to start the day with logging and rating, which sets the tone for better recommendations and a more complete log.
 export async function scheduleDailyReminder(): Promise<void> {
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) return;
@@ -235,10 +229,9 @@ export async function cancelDailyReminder(): Promise<void> {
   console.log('[Notifications] Daily reminder cancelled');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 5. CAFFEINE LIMIT EXCEEDED  (10 min)
 //    Fires at most once per calendar day.
-// ─────────────────────────────────────────────────────────────────────────
+
 export async function scheduleCaffeineLimitNotification(
   limitMg: number,
   currentMg: number
@@ -276,9 +269,8 @@ export async function scheduleCaffeineLimitNotification(
   console.log(`[Notifications] Caffeine limit notification scheduled (${currentMg}mg / ${limitMg}mg)`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // 6. WEEKLY RECAP  (every Sunday at 19:00)
-// ─────────────────────────────────────────────────────────────────────────
+//   A summary of the week's drinking habits, with a call to action to review and rate any unrated drinks and check out the recommendation for next week.
 export async function scheduleWeeklyRecap(): Promise<void> {
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) return;
@@ -307,9 +299,7 @@ export async function cancelWeeklyRecap(): Promise<void> {
   await cancelNotification(NOTIF_IDS.WEEKLY_RECAP);
 }
 
-// ─────────────────────────────────────────────────────────────────────────
 // SETUP — call once at app startup from _layout.tsx
-// ─────────────────────────────────────────────────────────────────────────
 export async function setupNotifications(): Promise<void> {
   const granted = await requestNotificationPermissions();
   if (!granted) return;

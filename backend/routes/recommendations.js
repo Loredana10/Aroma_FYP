@@ -1,4 +1,9 @@
-// backend/routes/recommendations.js
+// app/backend/routes/recommendations.js
+/**
+ * Routes for handling recommendation-related API endpoints.
+ * This module defines the routes for getting drink recommendations based on user input and saving the chosen recommendation to the database.
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js, and also proxy requests to the Python recommendation engine.
+**/
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
@@ -24,7 +29,7 @@ runMigrations();
 // POST /api/recommendations
 // Proxies the request to the Python engine and returns the 3 recommendations
 // to the app WITHOUT saving anything to the DB yet.
-// The DB insert only happens when the user taps "That's my drink" (see /chosen below).
+// The DB insert only happens when the user taps "That's my drink".
 router.post('/', async (req, res) => {
   const { user_id, mood, time_of_day, weather, dietary_restrictions, explore_new } = req.body;
 
@@ -57,8 +62,7 @@ router.post('/', async (req, res) => {
 
     const data = await response.json();
 
-    // ── Bug 5 fix: do NOT save all 3 to DB here.
-    //    The DB insert now only happens in POST /api/recommendations/chosen
+    //    The DB insert only happens in POST /api/recommendations/chosen
     //    when the user explicitly selects "That's my drink".
     console.log(`[Recommendations] Returned ${data.recommendations?.length ?? 0} recs to app — NOT saved to DB yet`);
 

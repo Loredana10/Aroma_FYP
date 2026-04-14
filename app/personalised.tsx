@@ -1,3 +1,16 @@
+//app/personalised.tsx
+
+/**
+ * Personalised drink recommendation questionnaire and results screen.
+ * Users answer 5 questions about their current preferences and context, then receive tailored drink recommendations based on their answers and their profile dietary restrictions.
+ * Key features:
+ * - 5-step questionnaire with progress bar and animated transitions
+ * - Fetches recommendations from the server based on user input and profile
+ * - Displays recommendations with match percentage, dietary badges, and "That's my drink" button
+ * - Saves chosen drink to home screen and database, and schedules a notification to log it later
+ * - Handles edge cases like new users with no ratings (shows accuracy warning) and allows users to update their profile dietary restrictions from the questionnaire
+ */
+
 import { useRouter } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import {
@@ -15,7 +28,7 @@ import { API_BASE_URL } from '@/constants/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ─── SHARED DIETARY OPTIONS ──────────────────────────────────────────────────
+// Shared dietary options used in both profile and questionnaire
 
 export const DIETARY_OPTIONS = [
   { value: 'Dairy-free',  label: 'Dairy-free',  sublabel: 'No milk, cream or dairy' },
@@ -24,7 +37,7 @@ export const DIETARY_OPTIONS = [
   { value: 'Nut allergy', label: 'Nut allergy',  sublabel: 'No almond or nut-based drinks' },
 ];
 
-// ─── QUESTION DATA ────────────────────────────────────────────────────────────
+// Questionnaire options for each step, with value, label, and sublabel for UI display
 
 const MOOD_OPTIONS = [
   { value: 'Tired and need a boost',         label: 'Need a boost',       sublabel: 'Tired and looking for energy' },
@@ -66,7 +79,7 @@ const STEP_SUBTITLES = [
 
 const MIN_RATINGS_FOR_FULL_HYBRID = 5;
 
-// ─── TYPES ────────────────────────────────────────────────────────────────────
+// Types
 
 interface QuestionnaireData {
   exploreNew:          string;
@@ -94,7 +107,7 @@ interface Recommendation {
 
 type Step = 0 | 1 | 2 | 3 | 4;
 
-// ─── COMPONENT ────────────────────────────────────────────────────────────────
+//Component
 
 export default function PersonalisedScreen() {
   const router      = useRouter();
@@ -141,7 +154,7 @@ export default function PersonalisedScreen() {
     }
   };
 
-  // ─── PROGRESS ANIMATION ──────────────────────────────────────────────────
+  // Progress bar animation: animates the width of the filled portion based on the current step (0 to 4)
 
   const animateProgress = (to: number) => {
     Animated.spring(progressAnim, {
@@ -153,7 +166,7 @@ export default function PersonalisedScreen() {
     inputRange: [0, 1], outputRange: ['0%', '100%'], extrapolate: 'clamp',
   });
 
-  // ─── NAVIGATION ──────────────────────────────────────────────────────────
+  // Navigation handlers for the questionnaire steps, including going back, proceeding to the next step, and submitting the final answers to fetch recommendations
 
   const goNext = () => {
     const next = (step + 1) as Step;
@@ -255,7 +268,7 @@ export default function PersonalisedScreen() {
     return false;
   };
 
-  // ─── FETCH RECOMMENDATIONS ───────────────────────────────────────────────
+  // Fetch recommendations from the server based on the user's answers to the questionnaire and their profile dietary restrictions. Handles loading state and errors.
 
   const fetchRecommendations = async (data: QuestionnaireData) => {
     if (!user) return;
@@ -291,9 +304,7 @@ export default function PersonalisedScreen() {
     }
   };
 
-  // ─── SAVE CHOSEN DRINK TO HOME SCREEN + DB ───────────────────────────────
-  // Bug 5 fix: only the drink the user taps "That's my drink" on is saved
-  // to the recommendations table. Previously all 3 were saved on every request.
+  // Handles when the user taps "That's my drink" on a recommendation card. Saves the chosen drink to AsyncStorage for the home screen, schedules a notification to log it later, and sends the chosen drink to the server to be saved in the database.
 
   const handleSaveDrink = async (rec: Recommendation) => {
     if (!user) return;
@@ -314,7 +325,7 @@ export default function PersonalisedScreen() {
         is_recommended: true,
       };
 
-      // Save to home screen (AsyncStorage) — unchanged
+      // Save to home screen (AsyncStorage)
       await AsyncStorage.setItem(
         `pending_recommendation_${user.uid}`,
         JSON.stringify(pending)
@@ -347,7 +358,7 @@ export default function PersonalisedScreen() {
     }
   };
 
-  // ─── LOADING ─────────────────────────────────────────────────────────────
+  // Loading state while fetching user profile dietary restrictions from Firestore. Shows a centered ActivityIndicator.
 
   if (loadingProfile) {
     return (
@@ -357,7 +368,7 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // ─── RESULTS (step 4) ────────────────────────────────────────────────────
+  // Results screen: shows the user's preferences from the questionnaire and the list of recommended drinks. Each recommendation card shows the match percentage, dietary badges, and a button to save it to the home screen. If the user has very few ratings, an accuracy warning is displayed.
 
   if (step === 4 && result) {
 
@@ -487,7 +498,7 @@ export default function PersonalisedScreen() {
     );
   }
 
-  // ─── QUESTIONNAIRE ───────────────────────────────────────────────────────
+  // Questionnaire screens (steps 0 to 3): show the current question with options to choose from. The "Continue" button is disabled until the user selects an option. Progress bar at the top animates as the user moves through the steps. On the final step, dietary restrictions can be toggled on/off and saved to the profile if changed.
 
   return (
     <View style={s.root}>
@@ -612,7 +623,7 @@ export default function PersonalisedScreen() {
   );
 }
 
-// ─── OPTION CARD ─────────────────────────────────────────────────────────────
+// Option Card component used in the questionnaire steps to display each selectable option with its label, sublabel, and selection state. It changes appearance when selected.
 
 function OptionCard({ label, sublabel, selected, onPress, s }: {
   label: string; sublabel: string;
@@ -635,7 +646,7 @@ function OptionCard({ label, sublabel, selected, onPress, s }: {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+// Styles
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   root:   { flex: 1, backgroundColor: C.background },

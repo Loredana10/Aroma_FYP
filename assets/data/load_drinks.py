@@ -16,20 +16,18 @@ import json
 import psycopg2
 from psycopg2.extras import execute_values
 
-# ─── DB CONFIG ────────────────────────────────────────────────────────────────
-# Update these values to match your PostgreSQL setup
+
 DB_CONFIG = {
     "host":     "localhost",
     "port":     5434,
-    "database": "aroma_db",       # your database name
-    "user":     "postgres",    # your postgres username
-    "password": "12345" # your postgres password
+    "database": "aroma_db", 
+    "user":     "postgres",  
+    "password": "12345" 
 }
 
-# ─── PATH TO JSON ─────────────────────────────────────────────────────────────
+
 JSON_PATH = "drinks_catalogue.json"
 
-# ──────────────────────────────────────────────────────────────────────────────
 
 def load_drinks():
     # Load JSON

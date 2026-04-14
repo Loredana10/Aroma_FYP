@@ -1,3 +1,11 @@
+// app/(auth)/signup.tsx
+
+/*
+This screen allows users to create a new account with email/password or Google Sign-In. 
+It includes live password strength validation and guides users through creating a strong password.
+*/
+
+
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -19,7 +27,7 @@ try {
   isGoogleAvailable = true;
 } catch { /* not available */ }
 
-// ─── PASSWORD RULES ───────────────────────────────────────────────────────────
+// Pasword rules and validation logic
 
 const PASSWORD_RULES = [
   { label: 'At least 8 characters',                    test: (pw: string) => pw.length >= 8 },
@@ -31,7 +39,7 @@ const PASSWORD_RULES = [
 
 const isPasswordValid = (pw: string) => PASSWORD_RULES.every((r) => r.test(pw));
 
-// ─── COMPONENT ────────────────────────────────────────────────────────────────
+// component
 
 export default function SignUp() {
   const router = useRouter();
@@ -163,7 +171,7 @@ export default function SignUp() {
             editable={!loading}
           />
 
-          {/* Live password requirements — only shown while typing */}
+          {/* Live password requirements, only shown while typing */}
           {showRules && (
             <View style={s.rulesBox}>
               {PASSWORD_RULES.map((rule) => {
@@ -243,7 +251,6 @@ export default function SignUp() {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   root:         { flex: 1, backgroundColor: C.background },

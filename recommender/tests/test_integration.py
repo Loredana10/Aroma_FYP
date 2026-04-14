@@ -1,6 +1,5 @@
 """
 Aroma — Integration Tests
-===========================
 Tests the full request-response cycle across the Node.js API and Python
 recommender engine, running against the live Railway deployment.
 
@@ -27,7 +26,7 @@ import time
 import requests
 import unittest
 
-# ─── CONFIG ───────────────────────────────────────────────────────────────────
+# Config
 # Both services are deployed on Railway — no local servers needed.
 # PYTHON_BASE is the base URL only — /recommend is appended in the recommend() helper.
 
@@ -42,12 +41,12 @@ USER_FAKE         = "integration_test_fake_user_99999" # never in DB
 TIMEOUT = 120   # seconds — WMF training can take a moment
 
 
-# ─── COLOUR OUTPUT ────────────────────────────────────────────────────────────
+# Colour Ouput
 
 RESET = "\033[0m"; GREEN = "\033[92m"; RED = "\033[91m"; BOLD = "\033[1m"; DIM = "\033[2m"
 
 
-# ─── SERVER PROBE ─────────────────────────────────────────────────────────────
+# Server Probes
 
 def probe_node(base: str) -> bool:
     """Probe the Node.js API by hitting /api/drinks (lightweight, no auth needed)."""
@@ -67,7 +66,7 @@ def probe_python(base: str) -> bool:
         return False
 
 
-# ─── BASE TEST CASE ───────────────────────────────────────────────────────────
+# Base Test Class
 
 class AromaIntegrationTest(unittest.TestCase):
     """Base class — checks both Railway services are reachable before running tests."""
@@ -124,9 +123,7 @@ class AromaIntegrationTest(unittest.TestCase):
             self.assertLessEqual(rec["match_percent"], 100)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PYTHON ENGINE DIRECT TESTS
-# ═══════════════════════════════════════════════════════════════════════════════
+# PYTHON ENGINE DIRECT TESTS (bypassing Node.js, hits Python service directly)
 
 class TestPythonEngineHealth(AromaIntegrationTest):
 
@@ -317,9 +314,7 @@ class TestContextualBoostIntegration(AromaIntegrationTest):
         self.assertRecommendations(recs)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # NODE.JS API INTEGRATION TESTS (full proxy chain)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestNodeLogsAPI(AromaIntegrationTest):
     """Node.js /api/logs routes — reads from real Railway DB."""
@@ -418,7 +413,7 @@ class TestNodeRecommendationsProxy(AromaIntegrationTest):
             f"Recommendation took {elapsed:.1f}s — should be under 90s")
 
 
-# ─── RUN ──────────────────────────────────────────────────────────────────────
+# run
 
 if __name__ == "__main__":
     verbosity = 2 if "-v" in sys.argv else 1

@@ -1,3 +1,9 @@
+//app/(auth)/signin.tsx
+
+/*
+This screen allows users to sign in with their email and password or with Google.
+*/
+
 import { syncUserToDatabase } from '@/constants/api';
 import { Colors } from '@/constants/theme';
 import { auth, db } from '@/firebaseConfig';

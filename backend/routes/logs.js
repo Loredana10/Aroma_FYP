@@ -1,4 +1,10 @@
-// backend/routes/logs.js
+// app/backend/routes/logs.js
+/**
+ * Routes for handling log-related API endpoints.
+ * This module defines the routes for creating a new log, fetching logs for a user, and deleting a log.
+ *
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js.
+ */
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');

@@ -1,3 +1,11 @@
+// app/backend/routes/users.js
+/**
+ * Routes for handling user-related API endpoints.
+ * This module defines the routes for creating a new user, fetching a user by ID, and updating user profile information.
+ *
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js.
+ */
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');

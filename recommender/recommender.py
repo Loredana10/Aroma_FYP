@@ -1,6 +1,5 @@
 """
 Aroma Hybrid Recommendation Engine
-====================================
 Pipeline:
   1. Cold Start (0 ratings)      - demographic similarity (age band + gender)
   2. Warm Start (1–4 ratings)    - content-based only + demographic boost
@@ -10,20 +9,6 @@ Pipeline:
   5. Weather boost               - soft preference for hot/iced drinks
   6. Wind-down boost             - low-caffeine boost when relaxing/evening
   7. Dietary filter              - hard removal of incompatible drinks
-
-Implicit ratings (supervisor suggestion):
-  The user-item matrix fed to matrix factorisation is augmented with implicit
-  signals derived from log frequency. A drink logged N times without a rating
-  contributes a synthetic preference score of min(N/10, 1.0) with confidence
-  weight c_ui = 1 + ALPHA * N. Explicit ratings always have higher confidence.
-  The IMPLICIT_CAP additive boost in hybrid_scores() is removed to avoid
-  double-counting now that implicit signals are baked into MF training.
-
-Cold start (supervisor suggestion):
-  Instead of returning community-popular drinks for users with 0 ratings,
-  the engine finds the K most demographically similar users (matching age band
-  and gender) and recommends what they rated highly. This justifies why the app
-  collects age/gender data and produces more meaningful first-time recommendations.
 
 Prints full terminal log on every request.
 """
@@ -58,8 +43,8 @@ DB_CONFIG = {
 # Higher ALPHA = implicit signals dominate more relative to explicit ratings
 ALPHA = 15
 
-# Cold-start demographic similarity
-DEMO_K = 20   # number of similar users to consider
+# Cold-start demographic similarity, number of similar users to consider
+DEMO_K = 20 
 
 # Age range strings as stored in the users table age_range column.
 # These map directly to the app profile screen options.
@@ -70,7 +55,7 @@ def get_conn():
     return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
 
 
-# ─── TERMINAL HELPERS ────────────────────────────────────────────────────────
+# Helpers
 
 def p(msg=""):
     print(msg, flush=True)
@@ -82,7 +67,7 @@ def divider():
     p("-" * 60)
 
 
-# ─── 1. DATA LOADERS ─────────────────────────────────────────────────────────
+# 1. Data Loaders
 
 def load_drinks():
     with get_conn() as conn:
@@ -214,7 +199,7 @@ def load_all_user_demographics():
         return pd.DataFrame(columns=["user_id", "age_range", "gender"])
 
 
-# ─── 2. DEMOGRAPHIC COLD START ───────────────────────────────────────────────
+# 2. Demographic Cold Start 
 
 def normalise_age_range(age_range):
     """
@@ -248,10 +233,10 @@ def demographic_cold_start(user_id, user_demographics, all_demographics_df,
     user_age_range = normalise_age_range(user_demographics.get("age_range"))
     user_gender    = user_demographics.get("gender", "").strip().lower() if user_demographics.get("gender") else None
 
-    p(f"  [DEMO] User demographics: age_range='{user_age_range}', gender='{user_gender}'")
+    p(f"User demographics: age_range='{user_age_range}', gender='{user_gender}'")
 
     if all_demographics_df.empty:
-        p("  [DEMO] No demographic data in DB — falling back to community popular")
+        p("No demographic data in DB — falling back to community popular")
         return {}, "no_demographic_data"
 
     # Normalise the age_range and gender columns for consistent string comparison.
@@ -271,7 +256,7 @@ def demographic_cold_start(user_id, user_demographics, all_demographics_df,
     gender_represented = user_gender is not None and user_gender in genders_in_db
 
     if user_gender is not None and not gender_represented:
-        p(f"  [DEMO] Gender '{user_gender}' not found in training data — using age band only")
+        p(f" Gender '{user_gender}' not found in training data — using age band only")
 
     # Build similarity scores for each other user
     similar_users = {}
@@ -304,13 +289,13 @@ def demographic_cold_start(user_id, user_demographics, all_demographics_df,
         similar_users[other_id] = sim
 
     if not similar_users:
-        p("  [DEMO] No demographically similar users found — falling back to community popular")
+        p("No demographically similar users found — falling back to community popular")
         return {}, "no_similar_users"
 
     # Log the top similar users
     top_similar = sorted(similar_users.items(), key=lambda x: x[1], reverse=True)[:10]
-    p(f"  [DEMO] Found {len(similar_users)} demographically similar users")
-    p(f"  [DEMO] Top {len(top_similar)} by similarity:")
+    p(f"Found {len(similar_users)} demographically similar users")
+    p(f"Top {len(top_similar)} by similarity:")
     p(f"  {'User ID':<36} {'Sim':>6}")
     p(f"  {'-'*36} {'-'*6}")
     for uid, sim in top_similar:
@@ -321,10 +306,10 @@ def demographic_cold_start(user_id, user_demographics, all_demographics_df,
     demo_ratings     = all_ratings_df[all_ratings_df["user_id"].isin(similar_user_ids)].copy()
 
     if demo_ratings.empty:
-        p("  [DEMO] Similar users have no ratings yet — falling back to community popular")
+        p(" Similar users have no ratings yet — falling back to community popular")
         return {}, "similar_users_unrated"
 
-    p(f"  [DEMO] {len(demo_ratings)} ratings found among similar users")
+    p(f"{len(demo_ratings)} ratings found among similar users")
 
     raw_scores  = {}
     weight_sums = {}
@@ -340,7 +325,7 @@ def demographic_cold_start(user_id, user_demographics, all_demographics_df,
     max_s = max(avg_scores.values()) if avg_scores else 1.0
     norm  = {did: v / max_s for did, v in avg_scores.items()}
 
-    p(f"  [DEMO] Scored {len(norm)} drinks from demographic signals")
+    p(f"Scored {len(norm)} drinks from demographic signals")
     p()
     p(f"  {'Drink Name':<34} {'Demo Score':>10}")
     p(f"  {'-'*34} {'-'*10}")
@@ -380,7 +365,7 @@ def community_popular_fallback(all_ratings_df, drinks_df):
     return scores
 
 
-# ─── 3. CONTENT-BASED ────────────────────────────────────────────────────────
+# Content-based filtering 
 
 def build_feature_matrix(drinks_df):
     df               = drinks_df.copy()
@@ -435,8 +420,7 @@ def content_based_scores(user_ratings_df, drinks_df, feature_matrix):
         scores[drink_id] = sim_total / weight_total if weight_total > 0 else 0.0
     return scores
 
-
-# ─── 4. WEIGHTED MATRIX FACTORISATION (WMF) WITH IMPLICIT SIGNALS ────────────
+# 4. Weighted Matrix Factorisation (WMF) with Implicit Signals
 
 def build_combined_matrix(all_ratings_df, all_log_counts):
     """
@@ -664,7 +648,7 @@ def collaborative_scores(user_id, all_ratings_df, all_log_counts, drinks_df):
     return scores, emb_user, user_map
 
 
-# ─── 5. HYBRID MERGE ─────────────────────────────────────────────────────────
+# 5. Merge Content-based and Collaborative Scores
 
 CONTENT_WEIGHT = 0.70
 COLLAB_WEIGHT  = 0.30
@@ -690,7 +674,7 @@ def hybrid_scores(cb_scores, cf_scores, rated_drink_ids, drinks_df):
     return final
 
 
-# ─── 6. DIETARY FILTER ───────────────────────────────────────────────────────
+# 6. Dietary Filter
 
 NUT_DRINKS = {
     "almond milk latte", "almond milk americano", "almond milk cappuccino",
@@ -732,7 +716,7 @@ def apply_dietary_filter(scores, drinks_df, dietary_restrictions):
     return filtered, removed
 
 
-# ─── 7. CONTEXTUAL SCORING ───────────────────────────────────────────────────
+# 7. Contextual Scoring
 
 CONTEXTUAL_BOOST_CAP = 0.25
 SIMILAR_USER_K       = 20
@@ -808,7 +792,7 @@ def apply_contextual_boost(scores, ctx_scores):
     return boosted
 
 
-# ─── 8. WEATHER FILTER ───────────────────────────────────────────────────────
+# 8. Weather Filter
 
 WEATHER_BOOST = 0.30
 
@@ -843,7 +827,7 @@ def apply_weather_filter(scores, drinks_df, weather):
     return boosted, boosted_log
 
 
-# ─── 9. WIND-DOWN BOOST ──────────────────────────────────────────────────────
+# 9. Winddown Filter
 
 WINDDOWN_BOOST              = 0.30
 WINDDOWN_MOODS              = {"relaxed and winding down"}
@@ -879,7 +863,7 @@ def apply_winddown_boost(scores, drinks_df, mood, time_of_day):
     return boosted, boosted_log
 
 
-# ─── 10. TERMINAL OUTPUT ─────────────────────────────────────────────────────
+# 10. Terminal Output
 
 def print_all_drinks_ranked(final_scores, drinks_df, cb_scores, cf_scores,
                              rated_ids, mode):
@@ -923,7 +907,7 @@ def print_top3(recs):
     p()
 
 
-# ─── 11. RESPONSE BUILDER ────────────────────────────────────────────────────
+# 11. Build API Response
 
 def build_response(top3, drinks_df, cb_scores, cf_scores, mode=None,
                    num_user_ratings=0, demo_method=None):
@@ -959,7 +943,7 @@ def build_response(top3, drinks_df, cb_scores, cf_scores, mode=None,
     return recs
 
 
-# ─── 12. RECOMMEND ENDPOINT ──────────────────────────────────────────────────
+# 12. Recommendation Endpoint
 
 @app.route("/recommend", methods=["POST"])
 def recommend():
@@ -989,7 +973,7 @@ def recommend():
         num_ratings = len(user_ratings_df)
         MIN_RATINGS_FOR_HYBRID = 5
 
-        # ─── COLD START (0 ratings) — demographic similarity ──────────────
+        # COLD START (0 ratings) — demographic similarity
         if user_ratings_df.empty:
             divider()
             p("  MODE: COLD START — 0 ratings")
@@ -1029,7 +1013,7 @@ def recommend():
                 "num_user_ratings": 0,
             })
 
-        # ─── Determine explore mode ────────────────────────────────────────
+        # Determine explore mode
         explore_new   = bool(data.get("explore_new", False))
         all_tried_ids = set(int(x) for x in user_ratings_df["drink_id"].tolist())
         rated_ids     = all_tried_ids if explore_new else set()
@@ -1057,7 +1041,7 @@ def recommend():
             stars = "*" * int(r["rating"])
             p(f"    [{stars:<5}] {name_lookup.get(r['drink_id'], r['drink_id'])}")
 
-        # ─── Step 1: Content-based (always runs for warm + full hybrid) ───
+        # Step 1: Content-based (always runs for warm + full hybrid)
         feature_matrix, _ = build_feature_matrix(drinks_df)
         cb = content_based_scores(user_ratings_df, drinks_df, feature_matrix)
 
@@ -1068,7 +1052,7 @@ def recommend():
         for did, score in sorted(cb.items(), key=lambda x: x[1], reverse=True):
             p(f"  {str(name_lookup.get(did, str(did))):<34} {score:>10.4f}")
 
-        # ─── Step 2: WMF Collaborative (5+ ratings only) ──────────────────
+        # Step 2: WMF Collaborative (5+ ratings only)
         divider()
         if num_ratings >= MIN_RATINGS_FOR_HYBRID:
             cf, emb_user, cf_user_map = collaborative_scores(
@@ -1092,7 +1076,7 @@ def recommend():
             p(f"  [STEP 2b] DEMOGRAPHIC BOOST for warm start user")
             user_demographics = load_user_demographics(user_id)
             all_demographics  = load_all_user_demographics()
-            p(f"  [DEMO] Warm start demographics: age_range={user_demographics.get('age_range')}, gender={user_demographics.get('gender')}")
+            p(f"Warm start demographics: age_range={user_demographics.get('age_range')}, gender={user_demographics.get('gender')}")
             demo_scores, demo_method = demographic_cold_start(
                 user_id, user_demographics, all_demographics,
                 all_ratings_df, drinks_df
@@ -1110,7 +1094,7 @@ def recommend():
             else:
                 p(f"  No demographic data available for warm start boost")
 
-        # ─── Step 3: Merge scores ─────────────────────────────────────────
+        # Step 3: Merge scores
         divider()
         if cf:
             mode   = "hybrid_wmf"
@@ -1125,7 +1109,7 @@ def recommend():
         p(f"  Final scored candidates: {len(scores)}")
         print_all_drinks_ranked(scores, drinks_df, cb, cf, rated_ids, mode)
 
-        # ─── Step 4: Contextual boost ─────────────────────────────────────
+        # Step 4: Contextual boost
         mood              = data.get("mood", "")
         time_of_day       = data.get("time_of_day", "")
         weather           = data.get("weather", "")
@@ -1167,7 +1151,7 @@ def recommend():
         else:
             p(f"  [STEP 4] CONTEXTUAL BOOST skipped — no mood/time provided")
 
-        # ─── Step 5: Weather filter ───────────────────────────────────────
+        # Step 5: Weather filter
         divider()
         if weather:
             p(f"  [STEP 5] WEATHER BOOST  weather='{weather}'")
@@ -1179,7 +1163,7 @@ def recommend():
         else:
             p(f"  [STEP 5] WEATHER BOOST skipped")
 
-        # ─── Step 5b: Wind-down boost ─────────────────────────────────────
+        # Step 5b: Wind-down boost
         divider()
         mood_lower_check = (mood or "").lower().strip()
         time_lower_check = (time_of_day or "").lower().strip()
@@ -1191,7 +1175,7 @@ def recommend():
         else:
             p(f"  [STEP 5b] WIND-DOWN BOOST skipped")
 
-        # ─── Step 6: Dietary filter ───────────────────────────────────────
+        # Step 6: Dietary filter
         divider()
         if dietary_restrictions:
             p(f"  [STEP 6] DIETARY FILTER  restrictions={dietary_restrictions}")
@@ -1217,7 +1201,7 @@ def recommend():
         return jsonify({"error": str(e)}), 500
 
 
-# ─── TRACK CLICK ─────────────────────────────────────────────────────────────
+# Track Clicks
 
 @app.route("/track_click", methods=["POST"])
 def track_click():
@@ -1239,7 +1223,7 @@ def track_click():
         return jsonify({"error": str(e)}), 500
 
 
-# ─── HEALTH CHECK ─────────────────────────────────────────────────────────────
+# Health Check
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -1247,7 +1231,7 @@ def health():
     return jsonify({"status": "ok", "service": "Aroma Recommender"})
 
 
-# ─── STARTUP ─────────────────────────────────────────────────────────────────
+# Start Up
 
 if __name__ == "__main__":
     section("Aroma Recommendation Engine - Starting")

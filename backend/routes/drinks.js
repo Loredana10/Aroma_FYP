@@ -1,3 +1,11 @@
+//app/backend/routes/drinks.js
+/**
+ * Routes for handling drink-related API endpoints.
+ * This module defines the routes for fetching all drinks and fetching a single drink by ID.
+ *
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js.
+ */
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');

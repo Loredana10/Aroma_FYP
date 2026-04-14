@@ -1,10 +1,8 @@
 // constants/api.ts
-// Update this IP address whenever your network changes
-// Find your IP by running ipconfig and looking for the WiFi IPv4 address
+// This file contains functions for calling our backend API, as well as any related constants like the base URL.
 export const API_BASE_URL = 'https://aromafyp-production.up.railway.app';
 
-// Sync a Firebase user to PostgreSQL
-// Call this after every sign in and sign up
+// Syncs a user's basic info to the database after they sign in with Firebase Auth. This ensures we have a record of them in our users table, which is needed for other API routes to work properly.
 export const syncUserToDatabase = async (
   uid: string,
   email: string | null,

@@ -1,5 +1,7 @@
 // backend/jest.config.js
-// Place this file in your backend/ folder alongside test_unit_api.js
+// Jest configuration for the backend tests.
+// This file tells Jest how to run the tests, where to find them, and which files to ignore.
+// It also specifies that we want to collect coverage information from our route handler files.
 module.exports = {
   testEnvironment: 'node',
   testTimeout:     30000,

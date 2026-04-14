@@ -34,8 +34,6 @@ DRINK_NAME_MAP = {
     'Soy Milk Latte':           'Soy Milk Latte',
     'Decaf Cappuccino':         'Decaf Cappuccino',
     'Decaf Latte':              'Decaf Latte',
-    'Vienna Coffee':            None,   # not in DB
-    'Irish Coffee':             None,   # not in DB
     'Turkish Coffee':           'Turkish Coffee',
     'Pour Over':                'Pour Over',
     'Pumpkin Spice Latte':      'Pumpkin Spice Latte',

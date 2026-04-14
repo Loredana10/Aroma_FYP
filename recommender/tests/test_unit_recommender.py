@@ -1,6 +1,5 @@
 """
 Aroma Recommender — Python Unit Tests
-=======================================
 Tests individual functions in recommender.py in isolation.
 No database connection or running server required.
 
@@ -23,7 +22,7 @@ import numpy as np
 from unittest.mock import patch, MagicMock
 from contextlib import contextmanager
 
-# ─── LOAD RECOMMENDER WITHOUT DB ──────────────────────────────────────────────
+# Loading recommender without db
 # recommender.py calls sys.stdout.reconfigure() at module level which breaks
 # when stdout is replaced with StringIO. We redirect to /dev/null instead.
 
@@ -64,7 +63,7 @@ def load_recommender():
 R = load_recommender()
 
 
-# ─── SUPPRESS PRINT HELPER ────────────────────────────────────────────────────
+# Supress print helper
 
 @contextmanager
 def quiet():
@@ -79,7 +78,7 @@ def quiet():
         devnull.close()
 
 
-# ─── SHARED FIXTURES ──────────────────────────────────────────────────────────
+# Shared fixtures
 
 def make_drinks():
     """
@@ -133,9 +132,7 @@ def make_ratings(user_ids, drink_ids, rating=4.0):
 DRINKS = make_drinks()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 1. normalise_age_range()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestNormaliseAgeRange(unittest.TestCase):
     """
@@ -143,7 +140,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
             None, empty string, integer input, unusual formats.
     """
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_standard_range_unchanged(self):
         """Arrange: standard DB value. Act+Assert: returned as-is (lowercased)."""
@@ -154,7 +151,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
             with self.subTest(val=val):
                 self.assertEqual(R.normalise_age_range(val), val)
 
-    # ── Whitespace ────────────────────────────────────────────────────────────
+    #  Whitespace 
 
     def test_leading_trailing_whitespace_stripped(self):
         self.assertEqual(R.normalise_age_range("  18-24 "), "18-24")
@@ -166,7 +163,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
     def test_tabs_and_newlines_stripped(self):
         self.assertEqual(R.normalise_age_range("\t18-24\n"), "18-24")
 
-    # ── Case sensitivity ──────────────────────────────────────────────────────
+    #  Case sensitivity 
 
     def test_uppercase_converted_to_lowercase(self):
         self.assertEqual(R.normalise_age_range("<18"), "<18")
@@ -176,7 +173,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
         result = R.normalise_age_range("SENIOR")
         self.assertEqual(result, "senior")
 
-    # ── None / empty ──────────────────────────────────────────────────────────
+    #  None / empty 
 
     def test_none_returns_none(self):
         """None is the most common missing-data case — must not crash."""
@@ -190,7 +187,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
         """A string of only spaces collapses to empty after strip → None."""
         self.assertIsNone(R.normalise_age_range("   "))
 
-    # ── Type edge cases ───────────────────────────────────────────────────────
+    #  Type edge cases 
 
     def test_integer_input_coerced_to_string(self):
         """If age is stored as an integer in the DB, it should not crash."""
@@ -201,7 +198,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
         result = R.normalise_age_range(18.0)
         self.assertIsNotNone(result)  # should not crash
 
-    # ── Weird characters ──────────────────────────────────────────────────────
+    #  Weird characters 
 
     def test_special_chars_not_removed(self):
         """The '<18' format uses a special character — must be preserved."""
@@ -212,9 +209,7 @@ class TestNormaliseAgeRange(unittest.TestCase):
         self.assertEqual(R.normalise_age_range("65+"), "65+")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 2. build_feature_matrix()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestBuildFeatureMatrix(unittest.TestCase):
     """
@@ -226,7 +221,7 @@ class TestBuildFeatureMatrix(unittest.TestCase):
         with quiet():
             self.matrix, self.scaler = R.build_feature_matrix(DRINKS)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path
 
     def test_row_count_matches_drink_count(self):
         self.assertEqual(self.matrix.shape[0], len(DRINKS))
@@ -247,7 +242,7 @@ class TestBuildFeatureMatrix(unittest.TestCase):
         for v in unique:
             self.assertIn(v, [0.0, 1.0])
 
-    # ── Edge cases ────────────────────────────────────────────────────────────
+    #  Edge cases 
 
     def test_single_drink_produces_one_row(self):
         single = DRINKS.head(1)
@@ -271,9 +266,7 @@ class TestBuildFeatureMatrix(unittest.TestCase):
         self.assertEqual(mat.shape[0], len(same_cat))
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 3. content_based_scores()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestContentBasedScores(unittest.TestCase):
     """
@@ -290,7 +283,7 @@ class TestContentBasedScores(unittest.TestCase):
         with quiet():
             return R.content_based_scores(df, DRINKS, self.fm)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_returns_score_for_every_drink(self):
         scores = self._score([(1, 5.0)])
@@ -308,7 +301,7 @@ class TestContentBasedScores(unittest.TestCase):
         self.assertGreater(scores[2], scores[11],
             "Cappuccino should score higher than Chamomile Tea for a Latte lover")
 
-    # ── Edge cases ────────────────────────────────────────────────────────────
+    #  Edge cases 
 
     def test_empty_ratings_returns_empty_dict(self):
         """No ratings at all — function should return {} not crash."""
@@ -334,7 +327,7 @@ class TestContentBasedScores(unittest.TestCase):
         scores = self._score([(1, 1.0)])
         self.assertEqual(len(scores), len(DRINKS))
 
-    # ── Boundary ──────────────────────────────────────────────────────────────
+    #  Boundary 
 
     def test_rating_exactly_4_is_treated_as_liked(self):
         """Boundary: exactly 4.0 stars should be included in liked drinks."""
@@ -350,9 +343,7 @@ class TestContentBasedScores(unittest.TestCase):
         self.assertEqual(len(scores), len(DRINKS))
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 4. build_combined_matrix() — three-case implicit signal logic
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestBuildCombinedMatrix(unittest.TestCase):
     """
@@ -375,7 +366,7 @@ class TestBuildCombinedMatrix(unittest.TestCase):
         with quiet():
             return R.build_combined_matrix(ratings, log_counts)
 
-    # ── Case 1: unrated + logged ──────────────────────────────────────────────
+    #  Case 1: unrated + logged 
 
     def test_case1_unrated_logged_adds_implicit_row(self):
         """Drink 3 logged 5x, never rated → implicit row added with pref=0.5."""
@@ -400,7 +391,7 @@ class TestBuildCombinedMatrix(unittest.TestCase):
         row = pref_df[(pref_df["user_id"] == "u1") & (pref_df["drink_id"] == 7)]
         self.assertAlmostEqual(float(row.iloc[0]["rating"]), 0.1, places=3)
 
-    # ── Case 2: high-rated + logged ───────────────────────────────────────────
+    #  Case 2: high-rated + logged 
 
     def test_case2_high_rated_logged_boosts_confidence(self):
         """Rated 5 stars AND logged 6x → confidence above base."""
@@ -422,7 +413,7 @@ class TestBuildCombinedMatrix(unittest.TestCase):
         rows = pref_df[(pref_df["user_id"] == "u1") & (pref_df["drink_id"] == 1)]
         self.assertEqual(len(rows), 1)
 
-    # ── Case 3: low-rated + logged ────────────────────────────────────────────
+    # Case 3: low-rated + logged 
 
     def test_case3_low_rated_logged_not_boosted(self):
         """Rated 2 stars AND logged 10x → confidence stays at base."""
@@ -436,7 +427,7 @@ class TestBuildCombinedMatrix(unittest.TestCase):
         base = 1 + R.ALPHA * 5
         self.assertEqual(conf_map[("u1", 1)], base)
 
-    # ── Empty / edge inputs ───────────────────────────────────────────────────
+    #  Empty / edge inputs 
 
     def test_empty_ratings_and_empty_logs(self):
         """Both inputs empty — should return empty DataFrame and empty dict."""
@@ -454,10 +445,7 @@ class TestBuildCombinedMatrix(unittest.TestCase):
         pref_df, conf_map = self._run([(1, 5.0)], {"u1": {}})
         self.assertEqual(len(pref_df), 1)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # 5. apply_dietary_filter()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestDietaryFilter(unittest.TestCase):
     """
@@ -475,7 +463,7 @@ class TestDietaryFilter(unittest.TestCase):
         with quiet():
             return R.apply_dietary_filter(scores, DRINKS, restrictions)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_dairy_free_removes_non_dairy_free_drinks(self):
         filtered, _ = self._filter(["Dairy-free"])
@@ -519,14 +507,14 @@ class TestDietaryFilter(unittest.TestCase):
         for name in non_df_names:
             self.assertIn(name, removed_names)
 
-    # ── No restriction ────────────────────────────────────────────────────────
+    #  No restriction 
 
     def test_empty_list_returns_all_drinks_unchanged(self):
         filtered, removed = self._filter([])
         self.assertEqual(len(filtered), len(DRINKS))
         self.assertEqual(removed, [])
 
-    # ── None input ────────────────────────────────────────────────────────────
+    #  None input 
 
     def test_none_restrictions_returns_all_drinks(self):
         """None should be treated as no restrictions — must not crash."""
@@ -534,7 +522,7 @@ class TestDietaryFilter(unittest.TestCase):
         self.assertEqual(len(filtered), len(DRINKS))
         self.assertEqual(removed, [])
 
-    # ── Case sensitivity ──────────────────────────────────────────────────────
+    # Case sensitivity 
 
     def test_uppercase_restriction_still_applied(self):
         """'DAIRY-FREE' should behave the same as 'Dairy-free'."""
@@ -549,7 +537,7 @@ class TestDietaryFilter(unittest.TestCase):
             row = DRINKS[DRINKS["drink_id"] == did].iloc[0]
             self.assertTrue(row["dairy_free"])
 
-    # ── Unknown / weird restrictions ──────────────────────────────────────────
+    # Unknown / weird restrictions 
 
     def test_unknown_restriction_string_does_not_crash(self):
         """'keto' is not a known restriction — should silently pass all drinks."""
@@ -569,7 +557,7 @@ class TestDietaryFilter(unittest.TestCase):
             row = DRINKS[DRINKS["drink_id"] == did].iloc[0]
             self.assertTrue(row["dairy_free"])
 
-    # ── Drink not in catalogue ────────────────────────────────────────────────
+    #  Drink not in catalogue 
 
     def test_drink_id_not_in_drinks_df_is_passed_through(self):
         """If scores contain a drink_id not in drinks_df, it should pass through (safe default)."""
@@ -578,7 +566,7 @@ class TestDietaryFilter(unittest.TestCase):
         self.assertIn(999, filtered,
             "Unknown drink_id should pass through filter (no info = assume safe)")
 
-    # ── Scores unchanged for passing drinks ───────────────────────────────────
+    #  Scores unchanged for passing drinks 
 
     def test_scores_unchanged_for_passing_drinks(self):
         """Filtering should not alter the score values of drinks that pass."""
@@ -588,9 +576,7 @@ class TestDietaryFilter(unittest.TestCase):
         self.assertAlmostEqual(filtered[5], 0.60, places=4)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 6. apply_weather_filter()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestWeatherFilter(unittest.TestCase):
     """
@@ -607,7 +593,7 @@ class TestWeatherFilter(unittest.TestCase):
         with quiet():
             return R.apply_weather_filter(scores, DRINKS, weather)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_cold_weather_boosts_hot_drinks(self):
         boosted, log = self._filter("Cold")
@@ -637,7 +623,7 @@ class TestWeatherFilter(unittest.TestCase):
         boosted, _ = self._filter("Hot/Warm", scores=scores)
         self.assertAlmostEqual(boosted[8], 0.6 * (1 + R.WEATHER_BOOST), places=4)
 
-    # ── No weather ────────────────────────────────────────────────────────────
+    #  No weather 
 
     def test_empty_string_returns_unchanged_scores(self):
         original = self._base_scores()
@@ -645,7 +631,7 @@ class TestWeatherFilter(unittest.TestCase):
         self.assertEqual(boosted, original)
         self.assertEqual(log, [])
 
-    # ── None input ────────────────────────────────────────────────────────────
+    #  None input 
 
     def test_none_weather_returns_unchanged_scores(self):
         """None from the request body — must not crash."""
@@ -654,7 +640,7 @@ class TestWeatherFilter(unittest.TestCase):
         self.assertEqual(boosted, original)
         self.assertEqual(log, [])
 
-    # ── Case sensitivity ──────────────────────────────────────────────────────
+    #  Case sensitivity 
 
     def test_lowercase_cold_applies_boost(self):
         """'cold' should work the same as 'Cold'."""
@@ -667,7 +653,7 @@ class TestWeatherFilter(unittest.TestCase):
         _, log_upper  = self._filter("HOT/WARM")
         self.assertEqual(len(log_normal), len(log_upper))
 
-    # ── Unknown weather ───────────────────────────────────────────────────────
+    # Unknown weather 
 
     def test_unknown_weather_value_returns_unchanged(self):
         """'Snowing' is not a known value — should return scores unchanged."""
@@ -682,7 +668,7 @@ class TestWeatherFilter(unittest.TestCase):
         boosted, log = self._filter("☀️")
         self.assertEqual(boosted, original)
 
-    # ── Boundary ──────────────────────────────────────────────────────────────
+    #  Boundary 
 
     def test_warm_alias_boosts_iced_drinks(self):
         """'warm' is an alias for 'hot' — should also boost iced drinks."""
@@ -690,9 +676,7 @@ class TestWeatherFilter(unittest.TestCase):
         self.assertGreater(len(log), 0, "'warm' should boost iced drinks")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 7. apply_winddown_boost()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestWindDownBoost(unittest.TestCase):
     """
@@ -707,7 +691,7 @@ class TestWindDownBoost(unittest.TestCase):
         with quiet():
             return R.apply_winddown_boost(self._base_scores(), DRINKS, mood, time)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_evening_and_winddown_mood_boosts_low_caffeine(self):
         boosted, log = self._boost("Relaxed and winding down", "Evening")
@@ -725,7 +709,7 @@ class TestWindDownBoost(unittest.TestCase):
         for did in high_ids:
             self.assertAlmostEqual(boosted[did], 0.5, places=4)
 
-    # ── One trigger sufficient ────────────────────────────────────────────────
+    #  One trigger sufficient 
 
     def test_evening_time_alone_triggers_boost(self):
         """Time='Evening' with neutral mood should still trigger the boost."""
@@ -737,7 +721,7 @@ class TestWindDownBoost(unittest.TestCase):
         _, log = self._boost("Relaxed and winding down", "Morning")
         self.assertGreater(len(log), 0)
 
-    # ── Neither trigger ───────────────────────────────────────────────────────
+    #  Neither trigger 
 
     def test_morning_boost_mood_does_not_trigger(self):
         boosted, log = self._boost("Tired and need a boost", "Morning")
@@ -748,7 +732,7 @@ class TestWindDownBoost(unittest.TestCase):
         boosted, log = self._boost("Fairly okay, just want a drink", "Afternoon")
         self.assertEqual(log, [])
 
-    # ── None inputs ───────────────────────────────────────────────────────────
+    #  None inputs 
 
     def test_none_mood_none_time_does_not_crash(self):
         """Both None — most common missing-data case from the frontend."""
@@ -766,7 +750,7 @@ class TestWindDownBoost(unittest.TestCase):
         _, log = self._boost("Relaxed and winding down", None)
         self.assertGreater(len(log), 0)
 
-    # ── Boundary conditions ───────────────────────────────────────────────────
+    #  Boundary conditions 
 
     def test_caffeine_exactly_at_threshold_is_boosted(self):
         """Drinks with caffeine_mg == WINDDOWN_CAFFEINE_THRESHOLD should be boosted."""
@@ -810,7 +794,7 @@ class TestWindDownBoost(unittest.TestCase):
             name = DRINKS[DRINKS["drink_id"] == did].iloc[0]["name"]
             self.assertIn(name, boosted_ids, f"{name} (0mg) should always be boosted")
 
-    # ── Case sensitivity ──────────────────────────────────────────────────────
+    #  Case sensitivity 
 
     def test_evening_uppercase_triggers_boost(self):
         """'EVENING' vs 'Evening' — case should not matter."""
@@ -819,9 +803,7 @@ class TestWindDownBoost(unittest.TestCase):
         self.assertEqual(len(log_normal), len(log_upper))
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 8. hybrid_scores()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestHybridScores(unittest.TestCase):
     """
@@ -835,7 +817,7 @@ class TestHybridScores(unittest.TestCase):
         with quiet():
             return R.hybrid_scores(cb, cf, rated, DRINKS)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_hybrid_formula_applied_correctly(self):
         cb = {1: 0.8, 2: 0.6}
@@ -853,7 +835,7 @@ class TestHybridScores(unittest.TestCase):
     def test_weights_sum_to_1(self):
         self.assertAlmostEqual(R.CONTENT_WEIGHT + R.COLLAB_WEIGHT, 1.0, places=4)
 
-    # ── CB-only fallback ──────────────────────────────────────────────────────
+    #  CB-only fallback 
 
     def test_empty_cf_uses_cb_only(self):
         cb = {1: 0.7, 2: 0.5}
@@ -861,7 +843,7 @@ class TestHybridScores(unittest.TestCase):
         self.assertAlmostEqual(result[1], 0.7, places=4)
         self.assertAlmostEqual(result[2], 0.5, places=4)
 
-    # ── Explore-new exclusion ─────────────────────────────────────────────────
+    #  Explore-new exclusion 
 
     def test_rated_drinks_excluded(self):
         cb = {1: 0.9, 2: 0.7, 3: 0.5}
@@ -877,7 +859,7 @@ class TestHybridScores(unittest.TestCase):
         # All drinks in the catalogue should be present (default 0 for missing)
         self.assertIn(1, result)
 
-    # ── Drinks not in scores ──────────────────────────────────────────────────
+    #  Drinks not in scores 
 
     def test_drink_missing_from_cb_scores_defaults_to_zero(self):
         """A drink in the catalogue but missing from cb_scores gets 0.0 for CB."""
@@ -888,9 +870,7 @@ class TestHybridScores(unittest.TestCase):
         self.assertAlmostEqual(result.get(2, 0.0), 0.0, places=4)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 9. apply_contextual_boost()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestContextualBoost(unittest.TestCase):
     """
@@ -902,7 +882,7 @@ class TestContextualBoost(unittest.TestCase):
         with quiet():
             return R.apply_contextual_boost(scores, ctx_scores)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_full_ctx_signal_applies_cap_boost(self):
         """ctx=1.0 → score * (1 + CONTEXTUAL_BOOST_CAP)."""
@@ -919,7 +899,7 @@ class TestContextualBoost(unittest.TestCase):
         expected = 0.8 * (1 + 0.5 * R.CONTEXTUAL_BOOST_CAP)
         self.assertAlmostEqual(result[1], expected, places=4)
 
-    # ── Edge cases ────────────────────────────────────────────────────────────
+    #  Edge cases 
 
     def test_drink_missing_from_ctx_scores_gets_zero_boost(self):
         """Drink 2 not in ctx_scores → no boost applied → score stays the same."""
@@ -937,9 +917,7 @@ class TestContextualBoost(unittest.TestCase):
         self.assertAlmostEqual(result[2], 0.3, places=4)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
 # 10. community_popular_fallback()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestCommunityPopularFallback(unittest.TestCase):
     """
@@ -957,7 +935,7 @@ class TestCommunityPopularFallback(unittest.TestCase):
                 for u, d, r in entries]
         return pd.DataFrame(rows)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_highest_rated_drink_gets_highest_score(self):
         ratings = self._make_ratings([
@@ -983,7 +961,7 @@ class TestCommunityPopularFallback(unittest.TestCase):
         scores  = self._run(ratings)
         self.assertAlmostEqual(max(scores.values()), 1.0, places=4)
 
-    # ── Edge cases ────────────────────────────────────────────────────────────
+    #  Edge cases 
 
     def test_empty_ratings_returns_empty_dict(self):
         empty = pd.DataFrame(columns=["user_id","drink_id","rating","mood","time_of_day","weather"])
@@ -1015,10 +993,7 @@ class TestCommunityPopularFallback(unittest.TestCase):
         score_vals = list(scores.values())
         self.assertAlmostEqual(score_vals[0], score_vals[1], places=4)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # 11. demographic_cold_start()
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class TestDemographicColdStart(unittest.TestCase):
     """
@@ -1038,7 +1013,7 @@ class TestDemographicColdStart(unittest.TestCase):
         with quiet():
             return R.demographic_cold_start("test_user", user_demo, all_demo, ratings, DRINKS)
 
-    # ── Happy path ────────────────────────────────────────────────────────────
+    #  Happy path 
 
     def test_perfect_match_returns_scores(self):
         scores, method = self._run(
@@ -1061,7 +1036,7 @@ class TestDemographicColdStart(unittest.TestCase):
         scores, _ = self._run({"age_range": "18-24", "gender": "Female"}, all_demo, ratings)
         self.assertEqual(max(scores, key=scores.get), 11)
 
-    # ── Fallback cases ────────────────────────────────────────────────────────
+    #  Fallback cases 
 
     def test_empty_all_demographics_returns_no_data(self):
         scores, method = self._run({"age_range": "18-24", "gender": "female"}, [], [])
@@ -1082,7 +1057,7 @@ class TestDemographicColdStart(unittest.TestCase):
         scores, method = self._run({"age_range": "18-24", "gender": "female"}, all_demo, [])
         self.assertEqual(method, "similar_users_unrated")
 
-    # ── None / missing demographics ───────────────────────────────────────────
+    #  None / missing demographics 
 
     def test_none_age_range_falls_back_gracefully(self):
         """User with no age data — should not crash, return empty scores."""
@@ -1098,7 +1073,7 @@ class TestDemographicColdStart(unittest.TestCase):
         self.assertIn(method, ("demographic_similarity",))
         self.assertGreater(len(scores), 0)
 
-    # ── Unrepresented gender ──────────────────────────────────────────────────
+    #  Unrepresented gender 
 
     def test_unrepresented_gender_matches_on_age_band_only(self):
         """Non-binary user: gender not in training data → falls back to age band."""
@@ -1110,7 +1085,7 @@ class TestDemographicColdStart(unittest.TestCase):
         self.assertGreater(len(scores), 0)
 
 
-# ─── RUN ──────────────────────────────────────────────────────────────────────
+# run
 
 if __name__ == "__main__":
     verbosity = 2 if "-v" in sys.argv else 1

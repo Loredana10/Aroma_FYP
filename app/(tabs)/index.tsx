@@ -1,3 +1,10 @@
+//app/(tabs)/index.tsx
+
+/*
+This is the main home screen of the app, showing a greeting, today's caffeine intake, a pending recommendation (if any), recently logged drinks, and some basic stats.
+*/
+
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -17,7 +24,7 @@ import {
   scheduleWelcomeNotification,
 } from '@/services/notifications';
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+//types
 
 interface Drink {
   drink_id: number;
@@ -83,7 +90,7 @@ interface CommunityStats {
   top_rated_drinks: TopRatedDrink[];
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// helpers
 
 const clamp = (val: number, min: number, max: number) =>
   Math.min(Math.max(val, min), max);
@@ -115,7 +122,7 @@ const getWeekLabel = () => {
   return `${fmt(mon)} – ${fmt(sun)}`;
 };
 
-// ─── MINI BAR CHART ──────────────────────────────────────────────────────────
+// Caffeine bar chart component, used in the stats section at the bottom of the home screen
 
 function CaffeineBarChart({
   data,
@@ -223,7 +230,7 @@ function CaffeineBarChart({
   );
 }
 
-// ─── COMPONENT ───────────────────────────────────────────────────────────────
+// Component
 
 export default function Index() {
   const { user } = useAuth();
@@ -247,7 +254,7 @@ export default function Index() {
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null);
   const [loadingStats,   setLoadingStats]   = useState(false);
 
-  // ── Rating modal state (for "Log + rate" pending recommendation flow) ────
+  // Rating modal state (for "Log + rate" pending recommendation flow)
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [ratingLogId,        setRatingLogId]        = useState<number | null>(null);
   const [ratingDrinkId,      setRatingDrinkId]      = useState<number | null>(null);
@@ -255,7 +262,7 @@ export default function Index() {
   const [pendingRating,      setPendingRating]      = useState(0);
   const [savingRating,       setSavingRating]       = useState(false);
 
-  // ─── LOAD ON FOCUS ───────────────────────────────────────────────────────
+  // Load user profile, today's caffeine, recently logged drinks, pending recommendation, and stats when the screen is focused
 
   useFocusEffect(
     useCallback(() => {
@@ -277,7 +284,8 @@ export default function Index() {
     }).start();
   };
 
-  // ─── DATA LOADERS ────────────────────────────────────────────────────────
+  // Load user profile from Firestore, including display name and caffeine limit. 
+  // The caffeine limit is stored both in state and AsyncStorage (for quick access when logging drinks) — if it's present, also schedule a daily notification to alert the user when they go over their limit.
 
   const loadProfile = async () => {
     try {
@@ -316,7 +324,7 @@ export default function Index() {
   const loadRecentDrinks = async () => {
     if (!user) return;
     try {
-      // Fetch from DB — not AsyncStorage — so ratings are never stale
+      // Fetch from DB so ratings are never stale
       const res = await fetch(`${API_BASE_URL}/api/logs/${user.uid}`);
       if (!res.ok) return;
       const rows = await res.json();
@@ -340,7 +348,6 @@ export default function Index() {
             shots:       row.shots       ?? 0,
             logged_at:   row.timestamp   ?? row.logged_at,
             log_id:      row.log_id,
-            // No user_rating here — home screen recent list never shows ratings
           });
         }
         if (recent.length === 3) break;
@@ -378,7 +385,8 @@ export default function Index() {
     }
   };
 
-  // ─── PENDING REC ACTIONS ─────────────────────────────────────────────────
+  // Log the pending recommendation drink — this is triggered when the user taps "Log + rate this drink" on the pending recommendation card. 
+  // It saves the drink to AsyncStorage, updates today's caffeine, sends the log to the backend, and then opens the rating modal.
 
   const handleLogPending = async () => {
     if (!user || !pendingRec) return;
@@ -453,7 +461,8 @@ export default function Index() {
     }
   };
 
-  // ── Submit rating from the home screen rating modal ──────────────────────
+  // Handle submitting a rating for the pending recommendation drink. 
+  // This is triggered when the user taps "Submit rating" in the rating modal that appears after logging a pending recommendation. It sends the rating to the backend and then closes the modal.
   const handleSubmitRating = async () => {
     if (!user || !ratingDrinkId || pendingRating === 0) {
       setRatingModalVisible(false);
@@ -500,7 +509,7 @@ export default function Index() {
     );
   };
 
-  // ─── RENDER HELPERS ──────────────────────────────────────────────────────
+  // Render Helpers
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -531,7 +540,7 @@ export default function Index() {
     );
   }
 
-  // ─── RENDER ──────────────────────────────────────────────────────────────
+  // Render
 
   return (
     <ScrollView
@@ -540,7 +549,7 @@ export default function Index() {
       showsVerticalScrollIndicator={false}
     >
 
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
+      {/*  HEADER */}
       <View style={s.header}>
         <View style={{ flex: 1 }}>
           <Text style={s.greeting}>
@@ -555,7 +564,7 @@ export default function Index() {
         />
       </View>
 
-      {/* ── CAFFEINE TRACKER ───────────────────────────────────────── */}
+      {/* CAFFEINE TRACKER*/}
       {caffeineLimit !== null && (
         <View style={s.card}>
           <View style={s.cardHeader}>
@@ -577,7 +586,7 @@ export default function Index() {
         </View>
       )}
 
-      {/* ── LOG A DRINK ────────────────────────────────────────────── */}
+      {/* LOG A DRINK */}
       <TouchableOpacity style={s.quickAddBtn} onPress={() => router.push('/log')} activeOpacity={0.8}>
         <View style={s.quickAddLeft}>
           <View style={s.quickAddIcon}>
@@ -591,7 +600,7 @@ export default function Index() {
         <Text style={s.chevron}>›</Text>
       </TouchableOpacity>
 
-      {/* ── PENDING RECOMMENDATION / REC CTA ───────────────────────── */}
+      {/* PENDING RECOMMENDATION / REC CTA */}
       {pendingRec ? (
         <View style={s.pendingCard}>
           <View style={s.pendingCardTop}>
@@ -623,7 +632,7 @@ export default function Index() {
         </TouchableOpacity>
       )}
 
-      {/* ── RECENTLY LOGGED ────────────────────────────────────────── */}
+      {/* RECENTLY LOGGED */}
       <View style={s.sectionHeader}>
         <Text style={s.sectionTitle}>Recently logged recommendations</Text>
         {recentDrinks.length > 0 && (
@@ -661,7 +670,7 @@ export default function Index() {
         </View>
       )}
 
-      {/* ── STATS ──────────────────────────────────────────────────── */}
+      {/* STATS */}
       <View style={s.statsDivider} />
 
       <View style={s.sectionHeader}>
@@ -780,7 +789,7 @@ export default function Index() {
 
       <View style={{ height: 48 }} />
 
-      {/* ── RATING MODAL (for "Log + rate" pending recommendation flow) ── */}
+      {/* RATING MODAL (for "Log + rate" pending recommendation flow) */}
       <Modal animationType="fade" transparent visible={ratingModalVisible}
         onRequestClose={() => setRatingModalVisible(false)}>
         <View style={s.ratingOverlay}>
@@ -832,7 +841,7 @@ export default function Index() {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+// Styles
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.background },
@@ -942,7 +951,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   rankStars:     { fontSize: 13, color: '#b07d2e' },
   rankCount:     { fontSize: 11, color: C.textMuted, marginTop: 1 },
 
-  // Rating modal styles
   ratingOverlay:   { flex: 1, backgroundColor: C.overlay, justifyContent: 'center', alignItems: 'center', padding: 24 },
   ratingBox:       { backgroundColor: C.surface, borderRadius: 20, padding: 28, width: '100%', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: C.border },
   ratingTitle:     { fontSize: 18, fontWeight: '700', color: C.text },

@@ -1,4 +1,11 @@
-// backend/routes/ratings.js
+// app/backend/routes/ratings.js
+/**
+ * Routes for handling rating-related API endpoints.
+ * This module defines the routes for creating/updating a rating, fetching ratings for a user, and fetching average ratings for drinks.
+ *
+ * The routes interact with the PostgreSQL database using the connection pool defined in db.js.
+ */
+
 const express = require('express');
 const router = require('express').Router();
 const pool = require('../db');
@@ -7,7 +14,6 @@ const pool = require('../db');
 // Always inserts a NEW rating row tied to a specific log_id.
 // Each log entry has its own unique rating — users can rate the same drink
 // differently across multiple logs (different cafés, different preparations).
-// We no longer do UPDATE — every rating is a fresh INSERT with its own rating_id.
 router.post('/', async (req, res) => {
   const { user_id, drink_id, log_id, star_rating, mood, time_of_day, weather } = req.body;
 
@@ -17,7 +23,6 @@ router.post('/', async (req, res) => {
 
   try {
     if (log_id) {
-      // ── PRIMARY PATH: log_id provided ────────────────────────────────────
       // Check if this specific log entry already has a rating.
       // If it does, update it (user changed their mind on THIS specific drink instance).
       // If not, insert a brand new rating row.
@@ -53,7 +58,7 @@ router.post('/', async (req, res) => {
       return res.status(201).json(result.rows[0]);
 
     } else {
-      // ── FALLBACK PATH: no log_id provided ────────────────────────────────
+      // FALLBACK PATH: no log_id provided
       // Insert a new rating without a log link.
       const result = await pool.query(
         `INSERT INTO ratings (user_id, drink_id, log_id, star_rating, mood, time_of_day, weather, timestamp)

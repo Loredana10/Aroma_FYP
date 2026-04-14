@@ -23,15 +23,14 @@ function RouterStack() {
   const segments          = useSegments();
   const router            = useRouter();
 
-  // useRef stores the subscription objects — .remove() is the correct
-  // way to unsubscribe in expo-notifications SDK 54+
+  // useRef stores the subscription objects returned by the notification listeners, allowing us to call .remove() on them during cleanup
   const notifListenerRef    = useRef<{ remove: () => void } | null>(null);
   const responseListenerRef = useRef<{ remove: () => void } | null>(null);
 
   const [profileCompleted, setProfileCompleted] = useState<boolean | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // ── Real-time Firestore listener for profile completion ───────────────────
+  // Real-time Firestore listener for profile completion
   useEffect(() => {
     if (!user) {
       setProfileCompleted(null);
@@ -61,7 +60,7 @@ function RouterStack() {
     return unsub;
   }, [user?.uid]);
 
-  // ── Auth navigation ───────────────────────────────────────────────────────
+  // Auth navigation logic based on user state, profile completion, and current route
   useEffect(() => {
     if (loading || !initialCheckDone) return;
 
@@ -77,7 +76,7 @@ function RouterStack() {
     }
   }, [user, loading, profileCompleted, initialCheckDone, segments]);
 
-  // ── Notification setup ────────────────────────────────────────────────────
+  // Notification setup
   useEffect(() => {
     // Request permissions and schedule daily + weekly repeating notifications
     setupNotifications();

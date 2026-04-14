@@ -1,3 +1,10 @@
+//app/(tabs)/explore.tsx
+
+/*
+This screen shows a map with nearby cafes using Google Places API. 
+Users can tap markers to see details in a bottom sheet, including ratings, hours, and actions for directions, calling, or visiting the website.
+*/
+
 import { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -19,7 +26,7 @@ const GOOGLE_PLACES_API_KEY = Platform.select({
   default: 'AIzaSyDJDevRkFdgb0DcIdwlpa4hiyw0P1H4_os',
 });
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+// types
 
 interface Cafe {
   place_id: string;
@@ -39,7 +46,7 @@ interface CafeDetails extends Omit<Cafe, 'opening_hours'> {
   opening_hours?: { open_now: boolean; weekday_text?: string[] };
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// helpers
 
 const stars = (rating: number) => {
   const full  = Math.floor(rating);
@@ -58,7 +65,7 @@ const openMaps = (cafe: Cafe) => {
   if (url) Linking.openURL(url);
 };
 
-// ─── MAIN ────────────────────────────────────────────────────────────────────
+//main
 
 export default function ExploreScreen() {
   const colorScheme = useColorScheme();
@@ -79,7 +86,7 @@ export default function ExploreScreen() {
 
   useEffect(() => { requestLocation(); }, []);
 
-  // ─── LOCATION ──────────────────────────────────────────────────────────────
+  // location and permissions
 
   const requestLocation = async () => {
     setLoading(true); setError(null);
@@ -103,7 +110,7 @@ export default function ExploreScreen() {
     }
   };
 
-  // ─── PLACES API ────────────────────────────────────────────────────────────
+  //uses Google Places API to fetch nearby cafes and details for a selected cafe
 
   const fetchNearbyCafes = async (lat: number, lng: number) => {
     try {
@@ -131,7 +138,7 @@ export default function ExploreScreen() {
     return null;
   };
 
-  // ─── INTERACTIONS ──────────────────────────────────────────────────────────
+  // interactions 
 
   const handleMarkerPress = async (cafe: Cafe) => {
     mapRef.current?.animateToRegion({
@@ -161,7 +168,7 @@ export default function ExploreScreen() {
     Animated.spring(sheetHeight, { toValue, useNativeDriver: false, tension: 65, friction: 11 }).start();
   };
 
-  // ─── STATES ────────────────────────────────────────────────────────────────
+  // different states for loading, error, and main content
 
   if (loading) {
     return (
@@ -184,7 +191,7 @@ export default function ExploreScreen() {
     );
   }
 
-  // ─── RENDER ────────────────────────────────────────────────────────────────
+  // render main map view with markers and bottom sheet for cafe details
 
   return (
     <View style={s.container}>
@@ -244,7 +251,7 @@ export default function ExploreScreen() {
       {selectedCafe && (
         <Animated.View style={[s.sheet, { height: sheetHeight }]}>
 
-          {/* Drag handle + close row — rendered ABOVE the ScrollView so nothing blocks it */}
+          {/* Drag handle + close row — rendered above the ScrollView so nothing blocks it */}
           <View style={s.sheetTopBar}>
             <TouchableOpacity style={s.sheetHandleArea} onPress={toggleSheetExpand} activeOpacity={0.7}>
               <View style={s.handleBar} />
@@ -326,7 +333,7 @@ export default function ExploreScreen() {
   );
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+
 
 const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.background },
@@ -349,7 +356,6 @@ const makeStyles = (C: typeof Colors.light) => StyleSheet.create({
 
   sheet: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, elevation: 12, overflow: 'hidden', borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, borderColor: C.border },
 
-  // Top bar sits above ScrollView — close button can never be blocked
   sheetTopBar:    { flexDirection: 'row', alignItems: 'center', paddingTop: 12, paddingBottom: 4, paddingHorizontal: 16 },
   sheetHandleArea:{ flex: 1, alignItems: 'center' },
   handleBar:      { width: 36, height: 4, backgroundColor: C.border, borderRadius: 2 },
